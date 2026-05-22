@@ -55,8 +55,12 @@ export class UsersService {
       .exec();
   }
 
+  async findByIdRaw(id: string): Promise<UserDocument | null> {
+    return this.userModel.findById(id).exec();
+  }
+
   async findById(id: string): Promise<UserModel> {
-    const user = await this.userModel.findById(id).exec();
+    const user = await this.findByIdRaw(id);
 
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
