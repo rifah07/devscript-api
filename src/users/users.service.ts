@@ -9,6 +9,7 @@ import * as bcrypt from 'bcryptjs';
 
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserInput } from './dto/create-user.input';
+import { UserModel } from './models/user.model';
 
 @Injectable()
 export class UsersService {
@@ -62,5 +63,17 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  private toModel(doc: UserDocument): UserModel {
+    return {
+      _id: doc._id.toString(), // ← ObjectId → string
+      email: doc.email,
+      name: doc.name,
+      role: doc.role,
+      bio: doc.bio,
+      avatarUrl: doc.avatarUrl,
+      createdAt: doc.createdAt,
+    };
   }
 }
