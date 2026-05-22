@@ -55,14 +55,14 @@ export class UsersService {
       .exec();
   }
 
-  async findById(id: string): Promise<UserDocument> {
+  async findById(id: string): Promise<UserModel> {
     const user = await this.userModel.findById(id).exec();
 
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    return user;
+    return this.toModel(user);
   }
 
   private toModel(doc: UserDocument): UserModel {
