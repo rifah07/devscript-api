@@ -23,6 +23,6 @@ export class UserModel {
   @Field({ nullable: true })
   declare avatarUrl?: string;
 
-  @Field()
-  declare createdAt: Date;
+  @Field({ nullable: true })
+  declare createdAt?: Date;
 }
