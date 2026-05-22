@@ -1,0 +1,28 @@
+import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { UserRole } from '../schemas/user.schema';
+
+registerEnumType(UserRole, { name: 'UserRole' });
+
+@ObjectType()
+export class UserModel {
+  @Field(() => ID)
+  declare _id: string;
+
+  @Field()
+  declare email: string;
+
+  @Field()
+  declare name: string;
+
+  @Field(() => UserRole)
+  declare role: UserRole;
+
+  @Field({ nullable: true })
+  declare bio?: string;
+
+  @Field({ nullable: true })
+  declare avatarUrl?: string;
+
+  @Field()
+  declare createdAt: Date;
+}
