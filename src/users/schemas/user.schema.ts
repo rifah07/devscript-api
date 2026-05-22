@@ -38,6 +38,12 @@ export class User {
 
   @Prop({ default: true })
   declare isActive: boolean;
+
+  @Prop()
+  declare createdAt: Date;
+
+  @Prop()
+  declare updatedAt: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
