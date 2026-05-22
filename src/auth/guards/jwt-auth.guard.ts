@@ -7,7 +7,6 @@ interface GqlContext {
     user?: UserDocument;
   };
 }
-
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
   getRequest(context: ExecutionContext) {
