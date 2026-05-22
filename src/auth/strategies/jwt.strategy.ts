@@ -39,6 +39,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Invalid token or user inactive');
     }
 
-    return user; // req.user will be UserDocument
+    return user;
   }
 }
