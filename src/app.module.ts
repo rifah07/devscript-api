@@ -10,6 +10,8 @@ import jwtConfig from './config/jwt.config';
 
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { PostsModule } from './posts/posts.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -52,6 +54,8 @@ import { UsersModule } from './users/users.module';
 
     AuthModule,
     UsersModule,
+    PostsModule,
+    AiModule,
   ],
 })
 export class AppModule {}
