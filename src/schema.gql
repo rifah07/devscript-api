@@ -2,9 +2,19 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type AiSuggestion {
+  suggestions: [String!]!
+}
+
 type AuthResponse {
   accessToken: String!
   user: UserModel!
+}
+
+input CreatePostInput {
+  body: String!
+  tags: [String!]
+  title: String!
 }
 
 """
@@ -18,15 +28,57 @@ input LoginInput {
 }
 
 type Mutation {
+  createPost(input: CreatePostInput!): PostModel!
+  deletePost(id: ID!): Boolean!
+  generatePostSummary(postId: String!): String!
   login(loginInput: LoginInput!): AuthResponse!
   logout: Boolean!
   logoutAllDevices: Boolean!
+  publishPost(id: ID!): PostModel!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
+  updatePost(input: UpdatePostInput!): PostModel!
+}
+
+type PaginatedPosts {
+  hasNextPage: Boolean!
+  nextCursor: String
+  posts: [PostModel!]!
+  totalCount: Int!
+}
+
+type PostModel {
+  _id: ID!
+  author: UserModel
+  body: String!
+  createdAt: DateTime!
+  readTime: Int!
+  slug: String!
+  status: PostStatus!
+  summary: String
+  tags: [String!]!
+  title: String!
+  updatedAt: DateTime!
+}
+
+enum PostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+input PostsFilterInput {
+  authorId: ID
+  cursor: ID
+  status: PostStatus
+  tag: String
 }
 
 type Query {
   me: UserModel!
+  post(slug: String!): PostModel!
+  posts(filter: PostsFilterInput): PaginatedPosts!
+  suggestTags(body: String!, title: String!): AiSuggestion!
+  suggestTitles(draft: String!): AiSuggestion!
   user(id: ID!): UserModel!
 }
 
@@ -38,6 +90,13 @@ input RegisterInput {
   email: String!
   name: String!
   password: String!
+}
+
+input UpdatePostInput {
+  body: String
+  id: ID!
+  tags: [String!]
+  title: String
 }
 
 type UserModel {
