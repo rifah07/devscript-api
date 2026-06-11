@@ -14,6 +14,7 @@ import { PostsModule } from './posts/posts.module';
 import { AiModule } from './ai/ai.module';
 import { CommentsModule } from './comments/comments.module';
 import { ReactionsModule } from './reactions/reactions.module';
+import cloudinaryConfig from './config/cloudinary.config';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { ReactionsModule } from './reactions/reactions.module';
     // in every module — it's available everywhere.
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig],
+      load: [appConfig, databaseConfig, jwtConfig, cloudinaryConfig],
       envFilePath: '.env',
     }),
 
