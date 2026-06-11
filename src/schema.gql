@@ -11,6 +11,23 @@ type AuthResponse {
   user: UserModel!
 }
 
+type CommentModel {
+  _id: ID!
+  author: UserModel
+  body: String!
+  createdAt: DateTime!
+  isDeleted: Boolean!
+  parent: ID
+  post: ID!
+  replies: [CommentModel!]
+}
+
+input CreateCommentInput {
+  body: String!
+  parentId: ID
+  postId: ID!
+}
+
 input CreatePostInput {
   body: String!
   tags: [String!]
@@ -28,7 +45,9 @@ input LoginInput {
 }
 
 type Mutation {
+  createComment(input: CreateCommentInput!): CommentModel!
   createPost(input: CreatePostInput!): PostModel!
+  deleteComment(id: ID!): Boolean!
   deletePost(id: ID!): Boolean!
   generatePostSummary(postId: String!): String!
   login(loginInput: LoginInput!): AuthResponse!
@@ -37,6 +56,8 @@ type Mutation {
   publishPost(id: ID!): PostModel!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
+  toggleReaction(input: ToggleReactionInput!): Boolean!
+  updateComment(input: UpdateCommentInput!): CommentModel!
   updatePost(input: UpdatePostInput!): PostModel!
 }
 
@@ -74,12 +95,33 @@ input PostsFilterInput {
 }
 
 type Query {
+  comments(postId: ID!): [CommentModel!]!
   me: UserModel!
   post(slug: String!): PostModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
+  reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
   suggestTags(body: String!, title: String!): AiSuggestion!
   suggestTitles(draft: String!): AiSuggestion!
   user(id: ID!): UserModel!
+}
+
+type ReactionSummary {
+  count: Int!
+  type: ReactionType!
+  userReacted: Boolean!
+}
+
+enum ReactionTargetType {
+  COMMENT
+  POST
+}
+
+enum ReactionType {
+  BRILLIANT
+  HELPFUL
+  INSPIRING
+  LIKE
+  SAVED
 }
 
 type RefreshResponse {
@@ -90,6 +132,17 @@ input RegisterInput {
   email: String!
   name: String!
   password: String!
+}
+
+input ToggleReactionInput {
+  targetId: ID!
+  targetType: ReactionTargetType!
+  type: ReactionType!
+}
+
+input UpdateCommentInput {
+  body: String!
+  id: ID!
 }
 
 input UpdatePostInput {
