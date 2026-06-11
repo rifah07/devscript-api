@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { Reaction, ReactionSchema } from './schemas/reaction.schema';
 import { ReactionsService } from './reactions.service';
 import { ReactionsResolver } from './reactions.resolver';
+import { ReactionsController } from './reactions.controller';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { ReactionsResolver } from './reactions.resolver';
     ]),
   ],
   providers: [ReactionsService, ReactionsResolver],
+  controllers: [ReactionsController],
   exports: [ReactionsService],
 })
 export class ReactionsModule {}
