@@ -19,6 +19,14 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": [
+      "multer",
+      "node"
+    ],
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/common/types"
+    ]
   }
 }
