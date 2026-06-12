@@ -24,5 +24,17 @@ export class UserModel {
   declare avatarUrl?: string;
 
   @Field({ nullable: true })
+  declare website?: string;
+
+  @Field({ nullable: true })
+  declare github?: string;
+
+  @Field({ nullable: true })
+  declare leetcode?: string;
+
+  @Field({ nullable: true })
+  declare twitter?: string;
+
+  @Field({ nullable: true })
   declare createdAt?: Date;
 }
