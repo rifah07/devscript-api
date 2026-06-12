@@ -1,4 +1,3 @@
-// src/common/services/upload.service.ts
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';

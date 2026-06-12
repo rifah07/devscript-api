@@ -36,6 +36,21 @@ export class User {
   @Prop({ default: '' })
   declare avatarUrl: string;
 
+  @Prop({ default: '' })
+  declare avatarPublicId: string; // ← store Cloudinary public_id for deletion
+
+  @Prop({ default: '' })
+  declare website: string;
+
+  @Prop({ default: '' })
+  declare github: string;
+
+  @Prop({ default: '' })
+  declare leetcode: string;
+
+  @Prop({ default: '' })
+  declare twitter: string;
+
   @Prop({ default: true })
   declare isActive: boolean;
 
