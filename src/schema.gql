@@ -59,6 +59,7 @@ type Mutation {
   toggleReaction(input: ToggleReactionInput!): Boolean!
   updateComment(input: UpdateCommentInput!): CommentModel!
   updatePost(input: UpdatePostInput!): PostModel!
+  updateProfile(input: UpdateProfileInput!): UserModel!
 }
 
 type PaginatedPosts {
@@ -152,14 +153,27 @@ input UpdatePostInput {
   title: String
 }
 
+input UpdateProfileInput {
+  bio: String
+  github: String
+  leetcode: String
+  name: String
+  twitter: String
+  website: String
+}
+
 type UserModel {
   _id: ID!
   avatarUrl: String
   bio: String
   createdAt: DateTime
   email: String!
+  github: String
+  leetcode: String
   name: String!
   role: UserRole!
+  twitter: String
+  website: String
 }
 
 enum UserRole {
