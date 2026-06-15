@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { User, UserDocument } from './schemas/user.schema';
 import { CreateUserInput } from './dto/create-user.input';
 import { UserModel } from './models/user.model';
+import { UpdateProfileInput } from './dto/update-user.input';
 
 @Injectable()
 export class UsersService {
@@ -69,14 +70,71 @@ export class UsersService {
     return this.toModel(user);
   }
 
+  // profile picture, bio, website, social links
+
+  async updateProfile(
+    userId: string,
+    input: UpdateProfileInput,
+  ): Promise<UserModel> {
+    // Remove undefined fields — only update what was provided
+    const updates: Partial<Record<string, unknown>> = {};
+    if (input.name !== undefined) updates['name'] = input.name;
+    if (input.bio !== undefined) updates['bio'] = input.bio;
+    if (input.website !== undefined) updates['website'] = input.website;
+    if (input.github !== undefined) updates['github'] = input.github;
+    if (input.twitter !== undefined) updates['twitter'] = input.twitter;
+
+    const user = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $set: updates },
+        { new: true }, // return updated document
+      )
+      .exec();
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return this.toModel(user);
+  }
+
+  async updateAvatar(
+    userId: string,
+    avatarUrl: string,
+    avatarPublicId: string,
+  ): Promise<UserModel> {
+    const user = await this.userModel
+      .findByIdAndUpdate(
+        userId,
+        { $set: { avatarUrl, avatarPublicId } },
+        { new: true },
+      )
+      .exec();
+
+    if (!user) throw new NotFoundException('User not found');
+
+    return this.toModel(user);
+  }
+
+  async getAvatarPublicId(userId: string): Promise<string | null> {
+    const user = await this.userModel
+      .findById(userId)
+      .select('avatarPublicId')
+      .exec();
+
+    return user?.avatarPublicId ?? null;
+  }
+
   private toModel(doc: UserDocument): UserModel {
     return {
-      _id: doc._id.toString(), // ← ObjectId → string
+      _id: doc._id.toString(),
       email: doc.email,
       name: doc.name,
       role: doc.role,
       bio: doc.bio,
       avatarUrl: doc.avatarUrl,
+      website: doc.website,
+      github: doc.github,
+      twitter: doc.twitter,
       createdAt: doc.createdAt,
     };
   }
