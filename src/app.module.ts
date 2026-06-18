@@ -16,6 +16,7 @@ import { CommentsModule } from './comments/comments.module';
 import { ReactionsModule } from './reactions/reactions.module';
 import cloudinaryConfig from './config/cloudinary.config';
 import { CommonModule } from './common/common.module';
+import { FollowsModule } from './follows/follows.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { CommonModule } from './common/common.module';
     CommentsModule,
     ReactionsModule,
     CommonModule,
+    FollowsModule,
   ],
 })
 export class AppModule {}
