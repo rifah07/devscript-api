@@ -11,8 +11,8 @@ import { FollowsModule } from '../follows/follows.module';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
-    NotificationsModule, // ← add
-    FollowsModule, // ← add (for getFollowerIds)
+    NotificationsModule,
+    FollowsModule, // (for getFollowerIds)
   ],
   providers: [PostsService, PostsResolver],
   controllers: [PostsController],

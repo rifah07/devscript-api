@@ -13,12 +13,16 @@ import { CreateCommentInput } from './dto/create-comment.input';
 import { UpdateCommentInput } from './dto/update-comment.input';
 import { UserRole } from '../users/schemas/user.schema';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { PostsService } from '../posts/posts.service';
 
 @Injectable()
 export class CommentsService {
   constructor(
     @InjectModel(Comment.name)
     private readonly commentModel: Model<CommentDocument>,
+    private readonly notificationsService: NotificationsService,
+    private readonly postsService: PostsService,
   ) {}
 
   async create(
@@ -54,7 +58,35 @@ export class CommentsService {
     });
 
     await comment.populate('author');
-    return this.toModel(comment);
+    const result = this.toModel(comment);
+
+    // Notify post author or parent comment author
+    if (input.parentId) {
+      // This is a reply - notify parent comment author
+      const parent = await this.commentModel.findById(input.parentId);
+      if (parent) {
+        void this.notificationsService.notifyCommentReply({
+          recipient: parent.author.toString(),
+          actor: author,
+          postId: input.postId,
+          commentId: comment._id.toString(),
+          postTitle: '',
+        });
+      }
+    } else {
+      // Top-level comment notify post author
+      const post = await this.postsService.findById(input.postId);
+      if (post?.author) {
+        void this.notificationsService.notifyPostComment({
+          recipient: post.author._id,
+          actor: author,
+          postId: input.postId,
+          commentId: comment._id.toString(),
+          postTitle: post.title,
+        });
+      }
+    }
+    return result;
   }
 
   async findByPost(postId: string): Promise<CommentModel[]> {
