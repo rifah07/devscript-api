@@ -12,6 +12,7 @@ import { FollowStats, PaginatedUsers } from './models/follow.model';
 import { UserModel } from '../users/models/user.model';
 import { UsersService } from '../users/users.service';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const PAGE_SIZE = 20;
 
@@ -21,6 +22,7 @@ export class FollowsService {
     @InjectModel(Follow.name)
     private readonly followModel: Model<FollowDocument>,
     private readonly usersService: UsersService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async follow(
@@ -40,6 +42,13 @@ export class FollowsService {
         follower: currentUser._id,
         following: new Types.ObjectId(targetUserId),
       });
+
+      // Notify the followed user
+      await this.notificationsService.notifyNewFollower({
+        recipient: targetUserId,
+        actor: currentUser,
+      });
+
       return true; // followed
     } catch (error: unknown) {
       // MongoDB duplicate key error code
