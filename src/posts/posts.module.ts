@@ -5,10 +5,14 @@ import { Post, PostSchema } from './schemas/post.schema';
 import { PostsService } from './posts.service';
 import { PostsResolver } from './posts.resolver';
 import { PostsController } from './posts.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { FollowsModule } from '../follows/follows.module';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
+    NotificationsModule, // ← add
+    FollowsModule, // ← add (for getFollowerIds)
   ],
   providers: [PostsService, PostsResolver],
   controllers: [PostsController],

@@ -14,6 +14,8 @@ import { UpdatePostInput } from './dto/update-post.input';
 import { PostsFilterInput } from './dto/posts-filter.input';
 import { UserRole } from '../users/schemas/user.schema';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FollowsService } from '../follows/follows.service';
 
 const PAGE_SIZE = 10;
 
@@ -21,6 +23,8 @@ const PAGE_SIZE = 10;
 export class PostsService {
   constructor(
     @InjectModel(Post.name) private readonly postModel: Model<PostDocument>,
+    private readonly notificationsService: NotificationsService,
+    private readonly followsService: FollowsService,
   ) {}
 
   async create(
@@ -131,7 +135,21 @@ export class PostsService {
     post.status = PostStatus.PUBLISHED;
     await post.save();
     await post.populate('author');
-    return this.toModel(post);
+    const result = this.toModel(post);
+
+    // Notify all followers about the new post — fire and forget
+    // We don't await this — no reason to slow down the publish response
+    void this.followsService
+      .getFollowerIds(requestor._id.toString())
+      .then((followerIds) =>
+        this.notificationsService.notifyNewPost({
+          followerIds,
+          actor: requestor,
+          postId: id,
+          postTitle: post.title,
+        }),
+      );
+    return result;
   }
 
   async remove(id: string, requestor: UserDocument): Promise<boolean> {
