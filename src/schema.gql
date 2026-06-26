@@ -39,6 +39,12 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type FollowStats {
+  followersCount: Int!
+  followingCount: Int!
+  isFollowing: Boolean!
+}
+
 input LoginInput {
   email: String!
   password: String!
@@ -49,17 +55,48 @@ type Mutation {
   createPost(input: CreatePostInput!): PostModel!
   deleteComment(id: ID!): Boolean!
   deletePost(id: ID!): Boolean!
+  followUser(userId: ID!): Boolean!
   generatePostSummary(postId: String!): String!
   login(loginInput: LoginInput!): AuthResponse!
   logout: Boolean!
   logoutAllDevices: Boolean!
+  markAllNotificationsRead: Boolean!
+  markNotificationRead(id: ID!): Boolean!
   publishPost(id: ID!): PostModel!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
   toggleReaction(input: ToggleReactionInput!): Boolean!
+  unfollowUser(userId: ID!): Boolean!
   updateComment(input: UpdateCommentInput!): CommentModel!
   updatePost(input: UpdatePostInput!): PostModel!
   updateProfile(input: UpdateProfileInput!): UserModel!
+}
+
+type NotificationModel {
+  _id: ID!
+  actor: UserModel
+  commentId: ID
+  createdAt: DateTime!
+  isRead: Boolean!
+  message: String
+  postId: ID
+  type: NotificationType!
+}
+
+enum NotificationType {
+  COMMENT_REPLY
+  NEW_FOLLOWER
+  NEW_POST_FROM_FOLLOWING
+  POST_COMMENT
+  POST_REACTION
+}
+
+type PaginatedNotifications {
+  hasNextPage: Boolean!
+  nextCursor: String
+  notifications: [NotificationModel!]!
+  totalCount: Int!
+  unreadCount: Int!
 }
 
 type PaginatedPosts {
@@ -67,6 +104,13 @@ type PaginatedPosts {
   nextCursor: String
   posts: [PostModel!]!
   totalCount: Int!
+}
+
+type PaginatedUsers {
+  hasNextPage: Boolean!
+  nextCursor: String
+  totalCount: Int!
+  users: [UserModel!]!
 }
 
 type PostModel {
@@ -97,12 +141,17 @@ input PostsFilterInput {
 
 type Query {
   comments(postId: ID!): [CommentModel!]!
+  followStats(currentUserId: ID, userId: ID!): FollowStats!
+  followers(cursor: ID, userId: ID!): PaginatedUsers!
+  following(cursor: ID, userId: ID!): PaginatedUsers!
   me: UserModel!
+  notifications(cursor: ID, unreadOnly: Boolean): PaginatedNotifications!
   post(slug: String!): PostModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
   reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
   suggestTags(body: String!, title: String!): AiSuggestion!
   suggestTitles(draft: String!): AiSuggestion!
+  unreadNotificationsCount: Int!
   user(id: ID!): UserModel!
 }
 
