@@ -42,6 +42,20 @@ export class Post {
   @Prop({ default: 0 })
   declare readTime: number;
 
+  @Prop({ default: 0, index: true })
+  declare viewCount: number;
+
+  // Store unique viewer IDs — prevents counting same user twice
+  // We use a Set-like array with a sparse index
+  // Cap at 1000 unique viewers to prevent unbounded growth
+  @Prop({ type: [String], default: [] })
+  declare uniqueViewers: string[];
+
+  // Cached bookmark count — updated when bookmarks change
+  // Storing it avoids a count query on every post fetch
+  @Prop({ default: 0 })
+  declare bookmarksCount: number;
+
   @Prop()
   declare createdAt: Date;
 

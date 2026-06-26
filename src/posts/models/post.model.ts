@@ -35,6 +35,12 @@ export class PostModel {
   @Field(() => Int)
   declare readTime: number;
 
+  @Field(() => Int)
+  declare viewCount: number;
+
+  @Field(() => Int)
+  declare bookmarksCount: number;
+
   @Field()
   declare createdAt: Date;
 
