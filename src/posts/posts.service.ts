@@ -166,6 +166,82 @@ export class PostsService {
     await this.postModel.updateOne({ _id: id }, { summary });
   }
 
+  async recordView(postId: string, viewerId?: string): Promise<void> {
+    // viewerId present = logged-in user
+    // viewerId absent = anonymous visitor
+
+    if (viewerId) {
+      // For logged-in users: only count once per user using $addToSet
+      // $addToSet adds to array only if not already present — atomic, no race condition
+      // $inc increments viewCount only if the viewer was actually added
+      const result = await this.postModel.updateOne(
+        {
+          _id: new Types.ObjectId(postId),
+          uniqueViewers: { $ne: viewerId }, // only if not already viewed
+        },
+        {
+          $addToSet: { uniqueViewers: viewerId },
+          $inc: { viewCount: 1 },
+        },
+      );
+
+      // Cap uniqueViewers array at 1000 to prevent unbounded growth
+      if (result.modifiedCount > 0) {
+        await this.postModel.updateOne(
+          { _id: new Types.ObjectId(postId) },
+          { $slice: { uniqueViewers: -1000 } }, // keep last 1000
+        );
+      }
+    } else {
+      // Anonymous — just increment view count
+      await this.postModel.updateOne(
+        { _id: new Types.ObjectId(postId) },
+        { $inc: { viewCount: 1 } },
+      );
+    }
+  }
+
+  async getAuthorAnalytics(authorId: string): Promise<{
+    totalViews: number;
+    totalPosts: number;
+    totalBookmarks: number;
+    topPosts: PostModel[];
+  }> {
+    const authorObjectId = new Types.ObjectId(authorId);
+
+    const [stats, topPosts] = await Promise.all([
+      this.postModel.aggregate<{
+        totalViews: number;
+        totalPosts: number;
+        totalBookmarks: number;
+      }>([
+        { $match: { author: authorObjectId } },
+        {
+          $group: {
+            _id: null,
+            totalViews: { $sum: '$viewCount' },
+            totalPosts: { $sum: 1 },
+            totalBookmarks: { $sum: '$bookmarksCount' },
+          },
+        },
+      ]),
+      this.postModel
+        .find({ author: authorObjectId })
+        .sort({ viewCount: -1 })
+        .limit(5)
+        .populate('author')
+        .lean()
+        .exec(),
+    ]);
+
+    return {
+      totalViews: stats[0]?.totalViews ?? 0,
+      totalPosts: stats[0]?.totalPosts ?? 0,
+      totalBookmarks: stats[0]?.totalBookmarks ?? 0,
+      topPosts: topPosts.map((p) => this.toModel(p)),
+    };
+  }
+
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   private generateUniqueSlug(title: string): string {
@@ -204,6 +280,8 @@ export class PostsService {
           : undefined,
       status: doc.status,
       readTime: doc.readTime,
+      viewCount: doc.viewCount ?? 0,
+      bookmarksCount: doc.bookmarksCount ?? 0,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
