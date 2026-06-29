@@ -9,6 +9,7 @@ import { PostsFilterInput } from './dto/posts-filter.input';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { AuthorAnalytics } from './models/author-analytics.model';
 
 @Resolver(() => PostModel)
 export class PostsResolver {
@@ -60,5 +61,22 @@ export class PostsResolver {
     @CurrentUser() user: UserDocument,
   ): Promise<boolean> {
     return this.postsService.remove(id, user);
+  }
+
+  @Mutation(() => Boolean)
+  async recordPostView(
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('viewerId', { type: () => ID, nullable: true }) viewerId?: string,
+  ): Promise<boolean> {
+    await this.postsService.recordView(postId, viewerId);
+    return true;
+  }
+
+  @Query(() => AuthorAnalytics, { name: 'myAnalytics' })
+  @UseGuards(JwtAuthGuard)
+  async getMyAnalytics(
+    @CurrentUser() user: UserDocument,
+  ): Promise<AuthorAnalytics> {
+    return this.postsService.getAuthorAnalytics(user._id.toString());
   }
 }
