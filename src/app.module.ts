@@ -18,6 +18,8 @@ import cloudinaryConfig from './config/cloudinary.config';
 import { CommonModule } from './common/common.module';
 import { FollowsModule } from './follows/follows.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { BookmarksModule } from './bookmarks/bookmarks.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -67,6 +69,8 @@ import { NotificationsModule } from './notifications/notifications.module';
     CommonModule,
     FollowsModule,
     NotificationsModule,
+    SearchModule,
+    BookmarksModule,
   ],
 })
 export class AppModule {}
