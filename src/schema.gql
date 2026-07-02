@@ -11,6 +11,13 @@ type AuthResponse {
   user: UserModel!
 }
 
+type AuthorAnalytics {
+  topPosts: [PostModel!]!
+  totalBookmarks: Int!
+  totalPosts: Int!
+  totalViews: Int!
+}
+
 type CommentModel {
   _id: ID!
   author: UserModel
@@ -63,8 +70,10 @@ type Mutation {
   markAllNotificationsRead: Boolean!
   markNotificationRead(id: ID!): Boolean!
   publishPost(id: ID!): PostModel!
+  recordPostView(postId: ID!, viewerId: ID): Boolean!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
+  toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
   unfollowUser(userId: ID!): Boolean!
   updateComment(input: UpdateCommentInput!): CommentModel!
@@ -117,6 +126,7 @@ type PostModel {
   _id: ID!
   author: UserModel
   body: String!
+  bookmarksCount: Int!
   createdAt: DateTime!
   readTime: Int!
   slug: String!
@@ -125,6 +135,7 @@ type PostModel {
   tags: [String!]!
   title: String!
   updatedAt: DateTime!
+  viewCount: Int!
 }
 
 enum PostStatus {
@@ -144,13 +155,19 @@ type Query {
   followStats(currentUserId: ID, userId: ID!): FollowStats!
   followers(cursor: ID, userId: ID!): PaginatedUsers!
   following(cursor: ID, userId: ID!): PaginatedUsers!
+  isBookmarked(postId: ID!): Boolean!
   me: UserModel!
+  myAnalytics: AuthorAnalytics!
+  myBookmarks(cursor: ID): PaginatedPosts!
   notifications(cursor: ID, unreadOnly: Boolean): PaginatedNotifications!
   post(slug: String!): PostModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
   reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
+  search(input: SearchInput!): SearchResult!
   suggestTags(body: String!, title: String!): AiSuggestion!
   suggestTitles(draft: String!): AiSuggestion!
+  topPosts(limit: Int): [PostModel!]!
+  trendingTags(limit: Int): [TrendingTag!]!
   unreadNotificationsCount: Int!
   user(id: ID!): UserModel!
 }
@@ -184,10 +201,30 @@ input RegisterInput {
   password: String!
 }
 
+input SearchInput {
+  authorId: ID
+  cursor: ID
+  limit: Int = 10
+  query: String!
+  tag: String
+}
+
+type SearchResult {
+  hasNextPage: Boolean!
+  nextCursor: String
+  posts: [PostModel!]!
+  totalCount: Int!
+}
+
 input ToggleReactionInput {
   targetId: ID!
   targetType: ReactionTargetType!
   type: ReactionType!
+}
+
+type TrendingTag {
+  count: Int!
+  tag: String!
 }
 
 input UpdateCommentInput {
