@@ -2,6 +2,20 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+input AdminUsersFilterInput {
+  cursor: ID
+  isActive: Boolean
+  role: UserRole
+  search: String
+}
+
+type AdminUsersResult {
+  hasNextPage: Boolean!
+  nextCursor: String
+  totalCount: Int!
+  users: [UserModel!]!
+}
+
 type AiSuggestion {
   suggestions: [String!]!
 }
@@ -41,6 +55,13 @@ input CreatePostInput {
   title: String!
 }
 
+input CreateReportInput {
+  description: String
+  reason: ReportReason!
+  targetId: ID!
+  targetType: ReportTargetType!
+}
+
 """
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
@@ -58,10 +79,16 @@ input LoginInput {
 }
 
 type Mutation {
+  activateUser(userId: ID!): UserModel!
+  adminDeleteComment(commentId: ID!): Boolean!
+  adminDeletePost(postId: ID!): Boolean!
+  changeUserRole(role: UserRole!, userId: ID!): UserModel!
   createComment(input: CreateCommentInput!): CommentModel!
   createPost(input: CreatePostInput!): PostModel!
+  deactivateUser(userId: ID!): UserModel!
   deleteComment(id: ID!): Boolean!
   deletePost(id: ID!): Boolean!
+  featurePost(featured: Boolean!, postId: ID!): Boolean!
   followUser(userId: ID!): Boolean!
   generatePostSummary(postId: String!): String!
   login(loginInput: LoginInput!): AuthResponse!
@@ -73,6 +100,8 @@ type Mutation {
   recordPostView(postId: ID!, viewerId: ID): Boolean!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
+  reportContent(input: CreateReportInput!): ReportModel!
+  reviewReport(input: ReviewReportInput!): ReportModel!
   toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
   unfollowUser(userId: ID!): Boolean!
@@ -115,11 +144,29 @@ type PaginatedPosts {
   totalCount: Int!
 }
 
+type PaginatedReports {
+  hasNextPage: Boolean!
+  nextCursor: String
+  reports: [ReportModel!]!
+  totalCount: Float!
+}
+
 type PaginatedUsers {
   hasNextPage: Boolean!
   nextCursor: String
   totalCount: Int!
   users: [UserModel!]!
+}
+
+type PlatformStats {
+  newPostsThisMonth: Int!
+  newUsersThisMonth: Int!
+  pendingReports: Int!
+  totalBookmarks: Int!
+  totalComments: Int!
+  totalPosts: Int!
+  totalReactions: Int!
+  totalUsers: Int!
 }
 
 type PostModel {
@@ -151,6 +198,8 @@ input PostsFilterInput {
 }
 
 type Query {
+  adminReports(cursor: ID, status: ReportStatus): PaginatedReports!
+  adminUsers(filter: AdminUsersFilterInput): AdminUsersResult!
   comments(postId: ID!): [CommentModel!]!
   followStats(currentUserId: ID, userId: ID!): FollowStats!
   followers(cursor: ID, userId: ID!): PaginatedUsers!
@@ -160,6 +209,7 @@ type Query {
   myAnalytics: AuthorAnalytics!
   myBookmarks(cursor: ID): PaginatedPosts!
   notifications(cursor: ID, unreadOnly: Boolean): PaginatedNotifications!
+  platformStats: PlatformStats!
   post(slug: String!): PostModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
   reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
@@ -199,6 +249,47 @@ input RegisterInput {
   email: String!
   name: String!
   password: String!
+}
+
+type ReportModel {
+  _id: ID!
+  adminNote: String
+  createdAt: DateTime!
+  description: String
+  reason: ReportReason!
+  reporter: UserModel
+  reviewedBy: UserModel
+  status: ReportStatus!
+  targetId: ID!
+  targetType: ReportTargetType!
+}
+
+enum ReportReason {
+  COPYRIGHT
+  HARASSMENT
+  INAPPROPRIATE
+  MISINFORMATION
+  OTHER
+  SPAM
+}
+
+enum ReportStatus {
+  DISMISSED
+  PENDING
+  RESOLVED
+  REVIEWED
+}
+
+enum ReportTargetType {
+  COMMENT
+  POST
+  USER
+}
+
+input ReviewReportInput {
+  adminNote: String
+  reportId: ID!
+  status: ReportStatus!
 }
 
 input SearchInput {
