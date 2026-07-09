@@ -20,6 +20,7 @@ import { FollowsModule } from './follows/follows.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { SearchModule } from './search/search.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { SearchModule } from './search/search.module';
     NotificationsModule,
     SearchModule,
     BookmarksModule,
+    AdminModule,
   ],
 })
 export class AppModule {}
