@@ -56,6 +56,9 @@ export class Post {
   @Prop({ default: 0 })
   declare bookmarksCount: number;
 
+  @Prop({ type: Types.ObjectId, ref: 'Category', default: null, index: true })
+  declare category: Types.ObjectId | null;
+
   @Prop()
   declare createdAt: Date;
 
@@ -71,3 +74,4 @@ PostSchema.index({ status: 1, createdAt: -1 });
 
 // Text index for basic search - allows $text queries on title and body
 PostSchema.index({ title: 'text', body: 'text' });
+PostSchema.index({ category: 1, status: 1, createdAt: -1 });

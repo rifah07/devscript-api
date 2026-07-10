@@ -1,6 +1,7 @@
 import { Field, ID, ObjectType, Int, registerEnumType } from '@nestjs/graphql';
 import { PostStatus } from '../schemas/post.schema';
 import { UserModel } from '../../users/models/user.model';
+import { CategoryModel } from '../../categories/models/category.model';
 
 registerEnumType(PostStatus, { name: 'PostStatus' });
 
@@ -40,6 +41,9 @@ export class PostModel {
 
   @Field(() => Int)
   declare bookmarksCount: number;
+
+  @Field(() => CategoryModel, { nullable: true })
+  declare category?: CategoryModel;
 
   @Field()
   declare createdAt: Date;
