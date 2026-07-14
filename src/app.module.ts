@@ -21,6 +21,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { SearchModule } from './search/search.module';
 import { AdminModule } from './admin/admin.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -73,6 +74,7 @@ import { AdminModule } from './admin/admin.module';
     SearchModule,
     BookmarksModule,
     AdminModule,
+    CategoriesModule,
   ],
 })
 export class AppModule {}
