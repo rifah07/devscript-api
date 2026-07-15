@@ -32,6 +32,15 @@ type AuthorAnalytics {
   totalViews: Int!
 }
 
+type CategoryModel {
+  _id: ID!
+  createdAt: DateTime!
+  description: String
+  name: String!
+  postCount: Int!
+  slug: String!
+}
+
 type CommentModel {
   _id: ID!
   author: UserModel
@@ -43,6 +52,11 @@ type CommentModel {
   replies: [CommentModel!]
 }
 
+input CreateCategoryInput {
+  description: String
+  name: String!
+}
+
 input CreateCommentInput {
   body: String!
   parentId: ID
@@ -51,6 +65,7 @@ input CreateCommentInput {
 
 input CreatePostInput {
   body: String!
+  categoryId: ID
   tags: [String!]
   title: String!
 }
@@ -83,9 +98,11 @@ type Mutation {
   adminDeleteComment(commentId: ID!): Boolean!
   adminDeletePost(postId: ID!): Boolean!
   changeUserRole(role: UserRole!, userId: ID!): UserModel!
+  createCategory(input: CreateCategoryInput!): CategoryModel!
   createComment(input: CreateCommentInput!): CommentModel!
   createPost(input: CreatePostInput!): PostModel!
   deactivateUser(userId: ID!): UserModel!
+  deleteCategory(id: ID!): Boolean!
   deleteComment(id: ID!): Boolean!
   deletePost(id: ID!): Boolean!
   featurePost(featured: Boolean!, postId: ID!): Boolean!
@@ -105,6 +122,7 @@ type Mutation {
   toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
   unfollowUser(userId: ID!): Boolean!
+  updateCategory(input: UpdateCategoryInput!): CategoryModel!
   updateComment(input: UpdateCommentInput!): CommentModel!
   updatePost(input: UpdatePostInput!): PostModel!
   updateProfile(input: UpdateProfileInput!): UserModel!
@@ -174,6 +192,7 @@ type PostModel {
   author: UserModel
   body: String!
   bookmarksCount: Int!
+  category: CategoryModel
   createdAt: DateTime!
   readTime: Int!
   slug: String!
@@ -200,6 +219,8 @@ input PostsFilterInput {
 type Query {
   adminReports(cursor: ID, status: ReportStatus): PaginatedReports!
   adminUsers(filter: AdminUsersFilterInput): AdminUsersResult!
+  categories: [CategoryModel!]!
+  category(slug: String!): CategoryModel!
   comments(postId: ID!): [CommentModel!]!
   followStats(currentUserId: ID, userId: ID!): FollowStats!
   followers(cursor: ID, userId: ID!): PaginatedUsers!
@@ -213,6 +234,7 @@ type Query {
   post(slug: String!): PostModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
   reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
+  relatedPosts(limit: Int, postId: ID!): [PostModel!]!
   search(input: SearchInput!): SearchResult!
   suggestTags(body: String!, title: String!): AiSuggestion!
   suggestTitles(draft: String!): AiSuggestion!
@@ -318,6 +340,12 @@ type TrendingTag {
   tag: String!
 }
 
+input UpdateCategoryInput {
+  description: String
+  id: ID!
+  name: String
+}
+
 input UpdateCommentInput {
   body: String!
   id: ID!
@@ -325,6 +353,7 @@ input UpdateCommentInput {
 
 input UpdatePostInput {
   body: String
+  categoryId: ID
   id: ID!
   tags: [String!]
   title: String
