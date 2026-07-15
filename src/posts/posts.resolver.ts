@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 
 import { PostsService } from './posts.service';
@@ -78,5 +78,13 @@ export class PostsResolver {
     @CurrentUser() user: UserDocument,
   ): Promise<AuthorAnalytics> {
     return this.postsService.getAuthorAnalytics(user._id.toString());
+  }
+
+  @Query(() => [PostModel], { name: 'relatedPosts' })
+  async getRelatedPosts(
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+  ): Promise<PostModel[]> {
+    return this.postsService.getRelatedPosts(postId, limit ?? 5);
   }
 }
