@@ -1,4 +1,4 @@
-import { InputType, Field } from '@nestjs/graphql';
+import { InputType, Field, ID } from '@nestjs/graphql';
 import {
   IsString,
   MinLength,
@@ -6,6 +6,7 @@ import {
   IsArray,
   IsOptional,
   ArrayMaxSize,
+  IsMongoId,
 } from 'class-validator';
 
 @InputType()
@@ -26,4 +27,9 @@ export class CreatePostInput {
   @IsArray()
   @ArrayMaxSize(10, { message: 'Maximum 10 tags allowed' })
   declare tags?: string[];
+
+  @Field(() => ID, { nullable: true })
+  @IsOptional()
+  @IsMongoId()
+  declare categoryId?: string;
 }

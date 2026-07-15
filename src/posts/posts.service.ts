@@ -16,6 +16,7 @@ import { UserRole } from '../users/schemas/user.schema';
 import type { UserDocument } from '../users/schemas/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FollowsService } from '../follows/follows.service';
+import { CategoriesService } from '../categories/categories.service';
 
 const PAGE_SIZE = 10;
 
@@ -25,6 +26,7 @@ export class PostsService {
     @InjectModel(Post.name) private readonly postModel: Model<PostDocument>,
     private readonly notificationsService: NotificationsService,
     private readonly followsService: FollowsService,
+    private readonly categoriesService: CategoriesService,
   ) {}
 
   async create(
@@ -40,10 +42,15 @@ export class PostsService {
       body: input.body,
       tags: input.tags ?? [],
       author: author._id,
+      category: input.categoryId ? new Types.ObjectId(input.categoryId) : null,
       readTime,
     });
 
-    await post.populate('author');
+    if (input.categoryId) {
+      await this.categoriesService.incrementPostCount(input.categoryId);
+    }
+
+    await post.populate(['author', 'category']);
     return this.toModel(post);
   }
 
@@ -240,6 +247,52 @@ export class PostsService {
       totalBookmarks: stats[0]?.totalBookmarks ?? 0,
       topPosts: topPosts.map((p) => this.toModel(p)),
     };
+  }
+
+  async getRelatedPosts(postId: string, limit = 5): Promise<PostModel[]> {
+    const post = await this.postModel.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    // Build a scoring pipeline:
+    // +3 points for same category
+    // +1 point per shared tag
+    // Excludes the post itself, only published posts
+    const related = await this.postModel.aggregate([
+      {
+        $match: {
+          _id: { $ne: post._id },
+          status: PostStatus.PUBLISHED,
+          $or: [{ category: post.category }, { tags: { $in: post.tags } }],
+        },
+      },
+      {
+        $addFields: {
+          // Count how many tags overlap with the source post
+          sharedTagsCount: {
+            $size: { $setIntersection: ['$tags', post.tags] },
+          },
+          // Boolean → 1/0 for same category
+          sameCategoryScore: {
+            $cond: [{ $eq: ['$category', post.category] }, 3, 0],
+          },
+        },
+      },
+      {
+        $addFields: {
+          relevanceScore: { $add: ['$sharedTagsCount', '$sameCategoryScore'] },
+        },
+      },
+      { $sort: { relevanceScore: -1, createdAt: -1 } },
+      { $limit: limit },
+    ]);
+
+    // Populate author and category on aggregation results
+    const populated = await this.postModel.populate(related, [
+      { path: 'author' },
+      { path: 'category' },
+    ]);
+
+    return populated.map((p) => this.toModel(p as PostDocument));
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
