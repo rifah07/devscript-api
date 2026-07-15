@@ -112,4 +112,10 @@ export class PostsController {
   async remove(@Param('id') id: string, @CurrentUser() user: UserDocument) {
     return this.postsService.remove(id, user);
   }
+  @Get(':id/related')
+  @ApiOperation({ summary: 'Get related posts by tags and category' })
+  @ApiParam({ name: 'id' })
+  async getRelated(@Param('id') id: string) {
+    return this.postsService.getRelatedPosts(id);
+  }
 }
