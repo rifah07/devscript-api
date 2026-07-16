@@ -28,6 +28,7 @@ export class SearchService {
     if (input.tag) query['tags'] = input.tag;
     if (input.authorId) query['author'] = new Types.ObjectId(input.authorId);
     if (input.cursor) query['_id'] = { $lt: new Types.ObjectId(input.cursor) };
+    if (input.space) query['space'] = input.space;
 
     const [posts, totalCount] = await Promise.all([
       this.postModel
@@ -110,6 +111,9 @@ export class SearchService {
       bookmarksCount: doc.bookmarksCount,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
+      space: doc.space,
+      postType: doc.postType,
+      gallery: doc.gallery,
     };
   }
 }
