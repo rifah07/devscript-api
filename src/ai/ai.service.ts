@@ -16,27 +16,53 @@ export class AiService {
     this.genAI = new GoogleGenerativeAI(apiKey);
   }
 
-  async generateSummary(title: string, body: string): Promise<string> {
+  async generateSummary(
+    title: string,
+    body: string,
+    postType: string = 'article',
+  ): Promise<string> {
+    const promptsByType: Record<string, string> = {
+      article: `Summarize this technical blog post in 2-3 sentences. Be concise and focus on key takeaways.`,
+      poem: `Write a gentle 1-2 sentence reflection on the mood and theme of this poem. Do not summarize the plot — capture the feeling.`,
+      reflection: `Write a warm 2-sentence summary capturing the spiritual or personal insight of this reflection.`,
+      note: `Summarize this short note in one sentence.`,
+    };
+
+    const instruction = promptsByType[postType] ?? promptsByType['article'];
+
     return this.callGemini(
-      `Summarize this blog post in 2-3 sentences. Be concise and focus on the key takeaways.
+      `${instruction}
 
 Title: ${title}
 
-Content: ${body.slice(0, 3000)}`, // limit body to avoid token overflow
+Content: ${body.slice(0, 3000)}`,
     );
   }
 
-  async suggestTags(title: string, body: string): Promise<string[]> {
+  async suggestTags(
+    title: string,
+    body: string,
+    postType: string = 'article',
+  ): Promise<string[]> {
+    const contextByType: Record<string, string> = {
+      article: 'developer blog post about technology',
+      poem: 'poem — suggest tags about its theme, emotion, and style (e.g. "longing", "nature", "gratitude")',
+      reflection:
+        'personal or Islamic reflection — suggest tags about its spiritual theme (e.g. "patience", "gratitude", "ramadan")',
+      note: 'short personal note',
+    };
+
+    const context = contextByType[postType] ?? contextByType['article'];
+
     const response = await this.callGemini(
-      `Suggest 3-5 relevant tags for this developer blog post.
-Return ONLY a JSON array of lowercase strings. No explanation. Example: ["nestjs","typescript","backend"]
+      `Suggest 3-5 relevant tags for this ${context}.
+Return ONLY a JSON array of lowercase strings. No explanation. Example: ["gratitude","patience","reflection"]
 
 Title: ${title}
 Content: ${body.slice(0, 2000)}`,
     );
 
     try {
-      // Strip markdown code fences if Gemini adds them
       const clean = response.replace(/```json|```/g, '').trim();
       const parsed = JSON.parse(clean) as unknown;
       if (Array.isArray(parsed)) {
