@@ -24,7 +24,11 @@ export class AiResolver {
   @UseGuards(JwtAuthGuard)
   async generatePostSummary(@Args('postId') postId: string): Promise<string> {
     const post = await this.postsService.findById(postId);
-    const summary = await this.aiService.generateSummary(post.title, post.body);
+    const summary = await this.aiService.generateSummary(
+      post.title,
+      post.body,
+      post.postType, // ← pass through
+    );
 
     if (summary) {
       await this.postsService.updateSummary(postId, summary);
