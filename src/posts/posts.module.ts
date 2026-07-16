@@ -8,6 +8,7 @@ import { PostsController } from './posts.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { FollowsModule } from '../follows/follows.module';
 import { CategoriesModule } from '../categories/categories.module';
+import { CommonModule } from '../common/common.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { CategoriesModule } from '../categories/categories.module';
     NotificationsModule,
     FollowsModule, // (for getFollowerIds)
     CategoriesModule, // (for getRelatedPosts)
+    CommonModule, // (for UploadService)
   ],
   providers: [PostsService, PostsResolver],
   controllers: [PostsController],
