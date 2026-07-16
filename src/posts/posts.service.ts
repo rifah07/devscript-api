@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -17,6 +18,7 @@ import type { UserDocument } from '../users/schemas/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FollowsService } from '../follows/follows.service';
 import { CategoriesService } from '../categories/categories.service';
+import { UploadService } from '../common/services/upload.service';
 
 const PAGE_SIZE = 10;
 
@@ -60,6 +62,8 @@ export class PostsService {
     if (filter.status) query['status'] = filter.status;
     if (filter.tag) query['tags'] = filter.tag;
     if (filter.authorId) query['author'] = new Types.ObjectId(filter.authorId);
+    if (filter.space) query['space'] = filter.space;
+    if (filter.postType) query['postType'] = filter.postType;
 
     if (filter.cursor) {
       query['_id'] = { $lt: new Types.ObjectId(filter.cursor) };
@@ -295,6 +299,86 @@ export class PostsService {
     return populated.map((p) => this.toModel(p as PostDocument));
   }
 
+  async addGalleryImages(
+    postId: string,
+    files: Express.Multer.File[],
+    requestor: UserDocument,
+    uploadService: UploadService,
+  ): Promise<PostModel> {
+    const post = await this.postModel.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    this.assertIsAuthorOrAdmin(post, requestor);
+
+    if (post.gallery.length + files.length > 10) {
+      throw new BadRequestException('Maximum 10 images allowed per post');
+    }
+
+    // Upload all images in parallel — much faster than sequential
+    const uploadResults = await Promise.all(
+      files.map((file) => uploadService.uploadPostCover(file)),
+    );
+
+    const newImages = uploadResults.map((result, index) => ({
+      url: result.url,
+      publicId: result.publicId,
+      width: result.width,
+      height: result.height,
+      alt: '',
+      order: post.gallery.length + index,
+    }));
+
+    post.gallery.push(...newImages);
+
+    // Set cover image automatically if this is the first image
+    if (!post.coverImageUrl && newImages[0]) {
+      post.coverImageUrl = newImages[0].url;
+      post.coverImagePublicId = newImages[0].publicId;
+      post.ogImage = newImages[0].url;
+    }
+
+    await post.save();
+    await post.populate(['author', 'category']);
+    return this.toModel(post);
+  }
+
+  async removeGalleryImage(
+    postId: string,
+    publicId: string,
+    requestor: UserDocument,
+    uploadService: UploadService,
+  ): Promise<PostModel> {
+    const post = await this.postModel.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    this.assertIsAuthorOrAdmin(post, requestor);
+
+    post.gallery = post.gallery.filter((img) => img.publicId !== publicId);
+
+    // Delete from Cloudinary too
+    await uploadService.deleteFile(publicId);
+
+    await post.save();
+    await post.populate(['author', 'category']);
+    return this.toModel(post);
+  }
+
+  // Generate Open Graph metadata automatically on publish
+  async generateOgMetadata(postId: string): Promise<void> {
+    const post = await this.postModel.findById(postId);
+    if (!post) return;
+
+    const ogTitle = post.title.slice(0, 60);
+    const ogDescription =
+      post.summary || post.body.slice(0, 160).trim() + '...';
+    const ogImage = post.coverImageUrl || post.gallery[0]?.url || '';
+
+    await this.postModel.updateOne(
+      { _id: postId },
+      { $set: { ogTitle, ogDescription, ogImage } },
+    );
+  }
+
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   private generateUniqueSlug(title: string): string {
@@ -318,6 +402,7 @@ export class PostsService {
 
   private toModel(doc: PostDocument): PostModel {
     const author = doc.author;
+    const category = doc.category;
 
     return {
       _id: doc._id.toString(),
@@ -326,15 +411,25 @@ export class PostsService {
       body: doc.body,
       summary: doc.summary,
       tags: doc.tags,
-      // If author is a plain object (populated), use it. If ObjectId, undefined.
+      space: doc.space,
+      postType: doc.postType,
+      coverImageUrl: doc.coverImageUrl,
+      gallery: doc.gallery,
+      ogTitle: doc.ogTitle,
+      ogDescription: doc.ogDescription,
+      ogImage: doc.ogImage,
       author:
         author && typeof author === 'object' && '_id' in author
           ? (author as unknown as PostModel['author'])
           : undefined,
+      category:
+        category && typeof category === 'object' && '_id' in category
+          ? (category as unknown as PostModel['category'])
+          : undefined,
       status: doc.status,
       readTime: doc.readTime,
-      viewCount: doc.viewCount ?? 0,
-      bookmarksCount: doc.bookmarksCount ?? 0,
+      viewCount: doc.viewCount,
+      bookmarksCount: doc.bookmarksCount,
       createdAt: doc.createdAt,
       updatedAt: doc.updatedAt,
     };
