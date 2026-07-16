@@ -8,6 +8,18 @@ export enum PostStatus {
   PUBLISHED = 'published',
 }
 
+export enum PostSpace {
+  DEVSCRIPT = 'devscript',
+  PERSONAL = 'personal',
+}
+
+export enum PostType {
+  ARTICLE = 'article', // technical writing, tutorials
+  POEM = 'poem', // poetry
+  REFLECTION = 'reflection', // Islamic knowledge, life reflections
+  NOTE = 'note', // short-form thoughts
+}
+
 @Schema({ timestamps: true })
 export class Post {
   @Prop({ required: true, trim: true })
@@ -59,6 +71,62 @@ export class Post {
   @Prop({ type: Types.ObjectId, ref: 'Category', default: null, index: true })
   declare category: Types.ObjectId | null;
 
+  @Prop({
+    enum: PostSpace,
+    required: true,
+    default: PostSpace.DEVSCRIPT,
+    index: true,
+  })
+  declare space: PostSpace;
+
+  @Prop({
+    enum: PostType,
+    required: true,
+    default: PostType.ARTICLE,
+    index: true,
+  })
+  declare postType: PostType;
+
+  // Cover image — used by both spaces
+  @Prop({ default: '' })
+  declare coverImageUrl: string;
+
+  @Prop({ default: '' })
+  declare coverImagePublicId: string;
+
+  // Image gallery — mainly for PERSONAL space (poetry + pinterest-style visuals)
+  @Prop({
+    type: [
+      {
+        url: { type: String, required: true },
+        publicId: { type: String, required: true },
+        width: { type: Number, required: true },
+        height: { type: Number, required: true },
+        alt: { type: String, default: '' },
+        order: { type: Number, default: 0 },
+      },
+    ],
+    default: [],
+  })
+  declare gallery: {
+    url: string;
+    publicId: string;
+    width: number;
+    height: number;
+    alt: string;
+    order: number;
+  }[];
+
+  // Open Graph metadata — for rich link previews on FB/Insta/Pinterest
+  @Prop({ default: '' })
+  declare ogTitle: string;
+
+  @Prop({ default: '' })
+  declare ogDescription: string;
+
+  @Prop({ default: '' })
+  declare ogImage: string; // usually same as coverImageUrl, but can differ
+
   @Prop()
   declare createdAt: Date;
 
@@ -68,10 +136,8 @@ export class Post {
 
 export const PostSchema = SchemaFactory.createForClass(Post);
 
-// Compound index: fetching all published posts sorted by date
-// This is the most common query in the entire app
-PostSchema.index({ status: 1, createdAt: -1 });
-
 // Text index for basic search - allows $text queries on title and body
 PostSchema.index({ title: 'text', body: 'text' });
 PostSchema.index({ category: 1, status: 1, createdAt: -1 });
+PostSchema.index({ space: 1, status: 1, createdAt: -1 });
+PostSchema.index({ space: 1, postType: 1, status: 1, createdAt: -1 });
