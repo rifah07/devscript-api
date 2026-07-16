@@ -2,7 +2,11 @@ import { Field, ID, ObjectType, Int, registerEnumType } from '@nestjs/graphql';
 import { PostStatus } from '../schemas/post.schema';
 import { UserModel } from '../../users/models/user.model';
 import { CategoryModel } from '../../categories/models/category.model';
+import { PostSpace, PostType } from '../schemas/post.schema';
+import { GalleryImageModel } from './gallery-image.model';
 
+registerEnumType(PostSpace, { name: 'PostSpace' });
+registerEnumType(PostType, { name: 'PostType' });
 registerEnumType(PostStatus, { name: 'PostStatus' });
 
 @ObjectType()
@@ -44,6 +48,27 @@ export class PostModel {
 
   @Field(() => CategoryModel, { nullable: true })
   declare category?: CategoryModel;
+
+  @Field(() => PostSpace)
+  declare space: PostSpace;
+
+  @Field(() => PostType)
+  declare postType: PostType;
+
+  @Field({ nullable: true })
+  declare coverImageUrl?: string;
+
+  @Field(() => [GalleryImageModel])
+  declare gallery: GalleryImageModel[];
+
+  @Field({ nullable: true })
+  declare ogTitle?: string;
+
+  @Field({ nullable: true })
+  declare ogDescription?: string;
+
+  @Field({ nullable: true })
+  declare ogImage?: string;
 
   @Field()
   declare createdAt: Date;
