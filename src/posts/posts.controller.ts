@@ -10,6 +10,8 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,6 +20,8 @@ import {
   ApiBearerAuth,
   ApiQuery,
   ApiParam,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 
 import { PostsService } from './posts.service';
@@ -26,11 +30,18 @@ import { PostStatus } from './schemas/post.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { UploadService } from '../common/services/upload.service';
+import { PostModel } from './models/post.model';
 
 @ApiTags('Posts')
 @Controller('posts')
 export class PostsController {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(
+    private readonly postsService: PostsService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Post()
   @UseGuards(JwtAuthGuard)
@@ -117,5 +128,52 @@ export class PostsController {
   @ApiParam({ name: 'id' })
   async getRelated(@Param('id') id: string) {
     return this.postsService.getRelatedPosts(id);
+  }
+
+  @Post(':id/gallery')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Upload images to post gallery (max 10 images)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+        },
+      },
+    },
+  })
+  @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
+  uploadGalleryImages(
+    @Param('id') postId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @CurrentUser() user: UserDocument,
+  ): Promise<PostModel> {
+    return this.postsService.addGalleryImages(
+      postId,
+      files,
+      user,
+      this.uploadService,
+    );
+  }
+
+  @Delete(':id/gallery/:publicId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @ApiOperation({ summary: 'Remove an image from post gallery' })
+  removeGalleryImage(
+    @Param('id') postId: string,
+    @Param('publicId') publicId: string,
+    @CurrentUser() user: UserDocument,
+  ): Promise<PostModel> {
+    return this.postsService.removeGalleryImage(
+      postId,
+      publicId,
+      user,
+      this.uploadService,
+    );
   }
 }
