@@ -145,7 +145,10 @@ export class PostsService {
 
     post.status = PostStatus.PUBLISHED;
     await post.save();
-    await post.populate('author');
+    // Generate OG metadata for social sharing
+    await this.generateOgMetadata(id);
+
+    await post.populate(['author', 'category']);
     const result = this.toModel(post);
 
     // Notify all followers about the new post — fire and forget
