@@ -1,6 +1,7 @@
 import { InputType, Field, ID } from '@nestjs/graphql';
 import { IsOptional, IsMongoId, IsEnum } from 'class-validator';
-import { PostStatus } from '../schemas/post.schema';
+import { PostSpace, PostStatus } from '../schemas/post.schema';
+import { PostType } from '../schemas/post.schema';
 
 @InputType()
 export class PostsFilterInput {
@@ -22,4 +23,14 @@ export class PostsFilterInput {
   @IsOptional()
   @IsMongoId()
   declare authorId?: string;
+
+  @Field(() => PostSpace, { nullable: true })
+  @IsOptional()
+  @IsEnum(PostSpace)
+  declare space?: PostSpace;
+
+  @Field(() => PostType, { nullable: true })
+  @IsOptional()
+  @IsEnum(PostType)
+  declare postType?: PostType;
 }
