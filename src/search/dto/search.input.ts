@@ -7,7 +7,10 @@ import {
   IsInt,
   Min,
   Max,
+  IsEnum,
 } from 'class-validator';
+
+import { PostSpace } from '../../posts/schemas/post.schema';
 
 @InputType()
 export class SearchInput {
@@ -37,4 +40,9 @@ export class SearchInput {
   @Min(1)
   @Max(20)
   declare limit?: number;
+
+  @Field(() => PostSpace, { nullable: true })
+  @IsOptional()
+  @IsEnum(PostSpace)
+  declare space?: PostSpace;
 }
