@@ -7,7 +7,9 @@ import {
   IsOptional,
   ArrayMaxSize,
   IsMongoId,
+  IsEnum,
 } from 'class-validator';
+import { PostSpace, PostType } from '../schemas/post.schema';
 
 @InputType()
 export class CreatePostInput {
@@ -27,6 +29,15 @@ export class CreatePostInput {
   @IsArray()
   @ArrayMaxSize(10, { message: 'Maximum 10 tags allowed' })
   declare tags?: string[];
+
+  @Field(() => PostSpace)
+  @IsEnum(PostSpace)
+  declare space: PostSpace;
+
+  @Field(() => PostType, { nullable: true })
+  @IsOptional()
+  @IsEnum(PostType)
+  declare postType?: PostType;
 
   @Field(() => ID, { nullable: true })
   @IsOptional()
