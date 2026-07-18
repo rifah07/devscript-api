@@ -36,5 +36,8 @@ export class UserModel {
   declare twitter?: string;
 
   @Field({ nullable: true })
+  declare penName?: string;
+
+  @Field({ nullable: true })
   declare createdAt?: Date;
 }

@@ -54,6 +54,9 @@ export class User {
   @Prop({ default: true })
   declare isActive: boolean;
 
+  @Prop({ default: '' })
+  declare penName: string;
+
   @Prop()
   declare createdAt: Date;
 
