@@ -19,6 +19,10 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { FollowsService } from '../follows/follows.service';
 import { CategoriesService } from '../categories/categories.service';
 import { UploadService } from '../common/services/upload.service';
+import {
+  isValidPostTypeForSpace,
+  getDefaultPostType,
+} from './constants/post-type-rules';
 
 const PAGE_SIZE = 10;
 
@@ -35,6 +39,15 @@ export class PostsService {
     input: CreatePostInput,
     author: UserDocument,
   ): Promise<PostModel> {
+    // Determine postType — use provided value or a sensible default for the space
+    const postType = input.postType ?? getDefaultPostType(input.space);
+
+    // Defense in depth — even if DTO validation is bypassed, this blocks bad data
+    if (!isValidPostTypeForSpace(input.space, postType)) {
+      throw new BadRequestException(
+        `postType "${postType}" is not valid for space "${input.space}"`,
+      );
+    }
     const slug = this.generateUniqueSlug(input.title);
     const readTime = this.calculateReadTime(input.body);
 
@@ -45,6 +58,8 @@ export class PostsService {
       tags: input.tags ?? [],
       author: author._id,
       category: input.categoryId ? new Types.ObjectId(input.categoryId) : null,
+      space: input.space,
+      postType,
       readTime,
     });
 
@@ -119,6 +134,17 @@ export class PostsService {
   ): Promise<PostModel> {
     const post = await this.postModel.findById(input.id);
     if (!post) throw new NotFoundException('Post not found');
+
+    if (input.postType || input.space) {
+      const finalSpace = input.space ?? post.space;
+      const finalPostType = input.postType ?? post.postType;
+
+      if (!isValidPostTypeForSpace(finalSpace, finalPostType)) {
+        throw new BadRequestException(
+          `postType "${finalPostType}" is not valid for space "${finalSpace}"`,
+        );
+      }
+    }
 
     this.assertIsAuthorOrAdmin(post, requestor);
 
