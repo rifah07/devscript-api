@@ -10,6 +10,7 @@ import {
   IsEnum,
 } from 'class-validator';
 import { PostSpace, PostType } from '../schemas/post.schema';
+import { IsValidPostTypeForSpace } from '../validators/post-type-space-match.validator';
 
 @InputType()
 export class CreatePostInput {
@@ -37,6 +38,12 @@ export class CreatePostInput {
   @Field(() => PostType, { nullable: true })
   @IsOptional()
   @IsEnum(PostType)
+  @IsValidPostTypeForSpace({
+    message: ({ value, object }) => {
+      const space = (object as { space?: PostSpace }).space;
+      return `"${value as string}" is not a valid post type for space "${space as string}". Check allowed combinations.`;
+    },
+  })
   declare postType?: PostType;
 
   @Field(() => ID, { nullable: true })
