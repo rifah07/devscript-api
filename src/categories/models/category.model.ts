@@ -1,4 +1,5 @@
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
+import { PostSpace } from '../../posts/schemas/post.schema';
 
 @ObjectType()
 export class CategoryModel {
@@ -16,6 +17,9 @@ export class CategoryModel {
 
   @Field(() => Int)
   declare postCount: number;
+
+  @Field(() => PostSpace)
+  declare space: PostSpace;
 
   @Field()
   declare createdAt: Date;

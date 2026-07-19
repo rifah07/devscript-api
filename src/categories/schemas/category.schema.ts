@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
+import { PostSpace } from '../../posts/schemas/post.schema';
 
 export type CategoryDocument = HydratedDocument<Category>;
 
@@ -18,6 +19,9 @@ export class Category {
   // Avoids a COUNT query every time categories are listed
   @Prop({ default: 0 })
   declare postCount: number;
+
+  @Prop({ enum: PostSpace, required: true, index: true })
+  declare space: PostSpace;
 
   @Prop()
   declare createdAt: Date;
