@@ -1,5 +1,12 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import {
+  IsString,
+  MinLength,
+  MaxLength,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
+import { PostSpace } from '../../posts/schemas/post.schema';
 
 @InputType()
 export class CreateCategoryInput {
@@ -14,4 +21,8 @@ export class CreateCategoryInput {
   @IsString()
   @MaxLength(300)
   declare description?: string;
+
+  @Field(() => PostSpace)
+  @IsEnum(PostSpace)
+  declare space: PostSpace;
 }
