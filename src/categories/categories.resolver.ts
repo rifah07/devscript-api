@@ -9,6 +9,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../users/schemas/user.schema';
+import { PostSpace } from '../posts/schemas/post.schema';
 
 @Resolver(() => CategoryModel)
 export class CategoriesResolver {
@@ -16,8 +17,12 @@ export class CategoriesResolver {
 
   // Public — anyone can browse categories
   @Query(() => [CategoryModel], { name: 'categories' })
-  async getCategories(): Promise<CategoryModel[]> {
-    return this.categoriesService.findAll();
+  async getCategories(
+    @Args('space', { type: () => PostSpace, nullable: true }) space?: PostSpace,
+  ): Promise<CategoryModel[]> {
+    return space
+      ? this.categoriesService.findAllBySpace(space)
+      : this.categoriesService.findAll();
   }
 
   @Query(() => CategoryModel, { name: 'category' })
