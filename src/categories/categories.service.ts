@@ -12,7 +12,7 @@ import { Category, CategoryDocument } from './schemas/category.schema';
 import { CategoryModel } from './models/category.model';
 import { CreateCategoryInput } from './dto/create-category.input';
 import { UpdateCategoryInput } from './dto/update-category.input';
-import { Post, PostDocument } from '../posts/schemas/post.schema';
+import { Post, PostDocument, PostSpace } from '../posts/schemas/post.schema';
 
 @Injectable()
 export class CategoriesService {
@@ -37,15 +37,32 @@ export class CategoriesService {
     const category = await this.categoryModel.create({
       name: input.name,
       slug,
+      space: input.space,
       description: input.description ?? '',
     });
 
     return this.toModel(category);
   }
 
+  async findById(id: string): Promise<CategoryModel> {
+    const category = await this.categoryModel.findById(id).lean().exec();
+    if (!category) throw new NotFoundException('Category not found');
+    return this.toModel(category);
+  }
+
   async findAll(): Promise<CategoryModel[]> {
     const categories = await this.categoryModel
       .find()
+      .sort({ postCount: -1, name: 1 })
+      .lean()
+      .exec();
+
+    return categories.map((c) => this.toModel(c));
+  }
+
+  async findAllBySpace(space: PostSpace): Promise<CategoryModel[]> {
+    const categories = await this.categoryModel
+      .find({ space })
       .sort({ postCount: -1, name: 1 })
       .lean()
       .exec();
@@ -113,6 +130,7 @@ export class CategoriesService {
       name: doc.name,
       slug: doc.slug,
       description: doc.description,
+      space: doc.space,
       postCount: doc.postCount,
       createdAt: doc.createdAt,
     };
