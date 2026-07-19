@@ -64,7 +64,12 @@ export class PostsService {
     });
 
     if (input.categoryId) {
-      await this.categoriesService.incrementPostCount(input.categoryId);
+      const category = await this.categoriesService.findById(input.categoryId);
+      if (category.space !== input.space) {
+        throw new BadRequestException(
+          `Category belongs to "${category.space}" space, but post is in "${input.space}" space`,
+        );
+      }
     }
 
     await post.populate(['author', 'category']);
@@ -142,6 +147,15 @@ export class PostsService {
       if (!isValidPostTypeForSpace(finalSpace, finalPostType)) {
         throw new BadRequestException(
           `postType "${finalPostType}" is not valid for space "${finalSpace}"`,
+        );
+      }
+    }
+
+    if (input.categoryId) {
+      const category = await this.categoriesService.findById(input.categoryId);
+      if (category.space !== input.space) {
+        throw new BadRequestException(
+          `Category belongs to "${category.space}" space, but post is in "${input.space}" space`,
         );
       }
     }
