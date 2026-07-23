@@ -10,6 +10,7 @@ import { FollowsModule } from '../follows/follows.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { CommonModule } from '../common/common.module';
 import { GalleryImageResolver } from './resolvers/gallery-image.resolver';
+import { PostCoverImageResolver } from './resolvers/post-cover-image.resolver';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { GalleryImageResolver } from './resolvers/gallery-image.resolver';
     CategoriesModule, // (for getRelatedPosts)
     CommonModule, // (for UploadService)
     GalleryImageResolver,
+    PostCoverImageResolver,
   ],
   providers: [PostsService, PostsResolver],
   controllers: [PostsController],
