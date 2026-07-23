@@ -121,6 +121,9 @@ export class BookmarksService {
       body: doc.body,
       summary: doc.summary,
       tags: doc.tags,
+      space: doc.space,
+      postType: doc.postType,
+      gallery: doc.gallery,
       author:
         author && typeof author === 'object' && '_id' in author
           ? (author as unknown as PostModel['author'])
