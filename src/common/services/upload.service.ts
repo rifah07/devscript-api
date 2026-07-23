@@ -43,6 +43,15 @@ export class UploadService {
         { width: 1200, height: 630, crop: 'fill' },
         { quality: 'auto', fetch_format: 'auto' },
       ],
+      // Eager: pre-generate these specific sizes immediately at upload time
+      // rather than waiting for the first viewer to request them.
+      // Cloudinary processes these in the background — upload response
+      // returns immediately, transformations complete within seconds.
+      eager: [
+        { width: 1000, height: 1500, crop: 'fill', gravity: 'auto' }, // pinterestPin
+        { width: 1080, height: 1080, crop: 'fill', gravity: 'auto' }, // square
+      ],
+      eager_async: true, // don't block the upload response waiting for these
     });
 
     return {
