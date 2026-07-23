@@ -22,6 +22,7 @@ import { BookmarksModule } from './bookmarks/bookmarks.module';
 import { SearchModule } from './search/search.module';
 import { AdminModule } from './admin/admin.module';
 import { CategoriesModule } from './categories/categories.module';
+import seoConfig from './config/seo.config';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { CategoriesModule } from './categories/categories.module';
     // in every module — it's available everywhere.
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, cloudinaryConfig],
+      load: [appConfig, databaseConfig, jwtConfig, cloudinaryConfig, seoConfig],
       envFilePath: '.env',
     }),
 
