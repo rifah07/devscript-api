@@ -23,6 +23,7 @@ import { SearchModule } from './search/search.module';
 import { AdminModule } from './admin/admin.module';
 import { CategoriesModule } from './categories/categories.module';
 import seoConfig from './config/seo.config';
+import { SeoModule } from './seo/seo.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import seoConfig from './config/seo.config';
     BookmarksModule,
     AdminModule,
     CategoriesModule,
+    SeoModule,
   ],
 })
 export class AppModule {}
