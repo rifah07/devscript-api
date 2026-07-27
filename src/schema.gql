@@ -69,6 +69,7 @@ input CreatePostInput {
   body: String!
   categoryId: ID
   postType: PostType
+  scheduledAt: String
   space: PostSpace!
   tags: [String!]
   title: String!
@@ -243,6 +244,7 @@ enum PostSpace {
 enum PostStatus {
   DRAFT
   PUBLISHED
+  SCHEDULED
 }
 
 enum PostType {
@@ -403,6 +405,7 @@ input UpdatePostInput {
   categoryId: ID
   id: ID!
   postType: PostType
+  scheduledAt: String
   space: PostSpace
   tags: [String!]
   title: String
