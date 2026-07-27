@@ -247,12 +247,99 @@ export class PostsService {
         );
       }
     } else {
-      // Anonymous — just increment view count
+      // Anonymous - just increment view count
       await this.postModel.updateOne(
         { _id: new Types.ObjectId(postId) },
         { $inc: { viewCount: 1 } },
       );
     }
+  }
+
+  async schedulePost(
+    postId: string,
+    scheduledAt: string,
+    requestor: UserDocument,
+  ): Promise<PostModel> {
+    const post = await this.postModel.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    this.assertIsAuthorOrAdmin(post, requestor);
+
+    const scheduleDate = new Date(scheduledAt);
+
+    if (scheduleDate.getTime() <= Date.now()) {
+      throw new BadRequestException('scheduledAt must be a future date');
+    }
+
+    post.status = PostStatus.SCHEDULED;
+    post.scheduledAt = scheduleDate;
+    await post.save();
+    await post.populate(['author', 'category']);
+
+    return this.toModel(post);
+  }
+
+  async cancelSchedule(
+    postId: string,
+    requestor: UserDocument,
+  ): Promise<PostModel> {
+    const post = await this.postModel.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    this.assertIsAuthorOrAdmin(post, requestor);
+
+    if (post.status !== PostStatus.SCHEDULED) {
+      throw new BadRequestException('Post is not currently scheduled');
+    }
+
+    post.status = PostStatus.DRAFT;
+    post.scheduledAt = null;
+    await post.save();
+    await post.populate(['author', 'category']);
+
+    return this.toModel(post);
+  }
+
+  // Called by BOTH the cron job (traditional server) AND
+  // the external trigger endpoint (Vercel Cron Jobs)
+  // Publishes every post whose scheduledAt time has passed
+  async publishDueScheduledPosts(): Promise<number> {
+    const now = new Date();
+
+    const duePosts = await this.postModel
+      .find({
+        status: PostStatus.SCHEDULED,
+        scheduledAt: { $lte: now },
+      })
+      .populate('author')
+      .exec();
+
+    if (duePosts.length === 0) return 0;
+
+    for (const post of duePosts) {
+      post.status = PostStatus.PUBLISHED;
+      post.scheduledAt = null;
+      await post.save();
+
+      // Reuse the same OG metadata + notification logic as manual publish
+      await this.generateOgMetadata(post._id.toString());
+
+      const author = post.author as unknown as UserDocument;
+
+      // Fire and forget — don't block the batch on notification delivery
+      void this.followsService
+        .getFollowerIds(author._id.toString())
+        .then((followerIds) =>
+          this.notificationsService.notifyNewPost({
+            followerIds,
+            actor: author,
+            postId: post._id.toString(),
+            postTitle: post.title,
+          }),
+        );
+    }
+
+    return duePosts.length;
   }
 
   async getAuthorAnalytics(authorId: string): Promise<{
