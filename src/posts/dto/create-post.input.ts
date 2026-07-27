@@ -8,6 +8,7 @@ import {
   ArrayMaxSize,
   IsMongoId,
   IsEnum,
+  IsDateString,
 } from 'class-validator';
 import { PostSpace, PostType } from '../schemas/post.schema';
 import { IsValidPostTypeForSpace } from '../validators/post-type-space-match.validator';
@@ -50,4 +51,9 @@ export class CreatePostInput {
   @IsOptional()
   @IsMongoId()
   declare categoryId?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsDateString({}, { message: 'scheduledAt must be a valid ISO date string' })
+  declare scheduledAt?: string;
 }
