@@ -128,7 +128,7 @@ export class Post {
   @Prop({ default: '' })
   declare ogImage: string; // usually same as coverImageUrl, but can differ
 
-  @Prop({ default: null, index: true })
+  @Prop({ type: Date, default: null, index: true })
   declare scheduledAt: Date | null;
 
   @Prop()
