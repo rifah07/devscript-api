@@ -5,6 +5,7 @@ export type PostDocument = HydratedDocument<Post>;
 
 export enum PostStatus {
   DRAFT = 'draft',
+  SCHEDULED = 'scheduled',
   PUBLISHED = 'published',
 }
 
@@ -126,6 +127,9 @@ export class Post {
 
   @Prop({ default: '' })
   declare ogImage: string; // usually same as coverImageUrl, but can differ
+
+  @Prop({ default: null, index: true })
+  declare scheduledAt: Date | null;
 
   @Prop()
   declare createdAt: Date;
