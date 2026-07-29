@@ -34,6 +34,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { UploadService } from '../common/services/upload.service';
 import { PostModel } from './models/post.model';
+import { Headers, UnauthorizedException } from '@nestjs/common';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -175,5 +176,26 @@ export class PostsController {
       user,
       this.uploadService,
     );
+  }
+
+  @Post('cron/publish-scheduled')
+  @ApiOperation({
+    summary:
+      'Externally-triggered endpoint to publish due scheduled posts (for Vercel Cron)',
+  })
+  @ApiResponse({ status: 200, description: 'Number of posts published' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing cron secret' })
+  async triggerScheduledPublish(@Headers('x-cron-secret') cronSecret: string) {
+    // Vercel Cron Jobs (or any external cron service) must send this
+    // exact value in the x-cron-secret header, otherwise this endpoint
+    // is publicly exposed and anyone could trigger it.
+    const expectedSecret = process.env.CRON_SECRET;
+
+    if (!expectedSecret || cronSecret !== expectedSecret) {
+      throw new UnauthorizedException('Invalid cron secret');
+    }
+
+    const publishedCount = await this.postsService.publishDueScheduledPosts();
+    return { publishedCount };
   }
 }
