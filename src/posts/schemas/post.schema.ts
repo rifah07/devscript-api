@@ -145,3 +145,4 @@ PostSchema.index({ title: 'text', body: 'text' });
 PostSchema.index({ category: 1, status: 1, createdAt: -1 });
 PostSchema.index({ space: 1, status: 1, createdAt: -1 });
 PostSchema.index({ space: 1, postType: 1, status: 1, createdAt: -1 });
+PostSchema.index({ status: 1, scheduledAt: 1 });
