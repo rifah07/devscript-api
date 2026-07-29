@@ -11,6 +11,8 @@ import { CategoriesModule } from '../categories/categories.module';
 import { CommonModule } from '../common/common.module';
 import { GalleryImageResolver } from './resolvers/gallery-image.resolver';
 import { PostCoverImageResolver } from './resolvers/post-cover-image.resolver';
+import { ScheduleModule } from '@nestjs/schedule';
+import { PostsCronService } from './posts.cron';
 
 @Module({
   imports: [
@@ -21,8 +23,9 @@ import { PostCoverImageResolver } from './resolvers/post-cover-image.resolver';
     CommonModule, // (for UploadService)
     GalleryImageResolver,
     PostCoverImageResolver,
+    ScheduleModule.forRoot(), // enables @Cron() decorators
   ],
-  providers: [PostsService, PostsResolver],
+  providers: [PostsService, PostsResolver, PostsCronService],
   controllers: [PostsController],
   exports: [PostsService], // export for AiModule
 })
