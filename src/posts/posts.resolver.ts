@@ -72,6 +72,25 @@ export class PostsResolver {
     return true;
   }
 
+  @Mutation(() => PostModel)
+  @UseGuards(JwtAuthGuard)
+  async schedulePost(
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('scheduledAt') scheduledAt: string,
+    @CurrentUser() user: UserDocument,
+  ): Promise<PostModel> {
+    return this.postsService.schedulePost(postId, scheduledAt, user);
+  }
+
+  @Mutation(() => PostModel)
+  @UseGuards(JwtAuthGuard)
+  async cancelSchedule(
+    @Args('postId', { type: () => ID }) postId: string,
+    @CurrentUser() user: UserDocument,
+  ): Promise<PostModel> {
+    return this.postsService.cancelSchedule(postId, user);
+  }
+
   @Query(() => AuthorAnalytics, { name: 'myAnalytics' })
   @UseGuards(JwtAuthGuard)
   async getMyAnalytics(
