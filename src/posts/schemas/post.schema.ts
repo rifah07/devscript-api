@@ -153,3 +153,4 @@ PostSchema.index({ category: 1, status: 1, createdAt: -1 });
 PostSchema.index({ space: 1, status: 1, createdAt: -1 });
 PostSchema.index({ space: 1, postType: 1, status: 1, createdAt: -1 });
 PostSchema.index({ status: 1, scheduledAt: 1 });
+PostSchema.index({ series: 1, seriesOrder: 1 });
