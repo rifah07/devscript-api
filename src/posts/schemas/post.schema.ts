@@ -128,6 +128,13 @@ export class Post {
   @Prop({ default: '' })
   declare ogImage: string; // usually same as coverImageUrl, but can differ
 
+  @Prop({ type: Types.ObjectId, ref: 'Series', default: null, index: true })
+  declare series: Types.ObjectId | null;
+
+  // Position within the series — 1, 2, 3... for reading order
+  @Prop({ default: null })
+  declare seriesOrder: number | null;
+
   @Prop({ type: Date, default: null, index: true })
   declare scheduledAt: Date | null;
 
