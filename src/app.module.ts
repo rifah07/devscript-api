@@ -24,6 +24,7 @@ import { AdminModule } from './admin/admin.module';
 import { CategoriesModule } from './categories/categories.module';
 import seoConfig from './config/seo.config';
 import { SeoModule } from './seo/seo.module';
+import { SeriesModule } from './series/series.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { SeoModule } from './seo/seo.module';
     AdminModule,
     CategoriesModule,
     SeoModule,
+    SeriesModule,
   ],
 })
 export class AppModule {}
