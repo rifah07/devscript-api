@@ -2,6 +2,12 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+input AddPostToSeriesInput {
+  order: Int
+  postId: ID!
+  seriesId: ID!
+}
+
 input AdminUsersFilterInput {
   cursor: ID
   isActive: Boolean
@@ -82,6 +88,12 @@ input CreateReportInput {
   targetType: ReportTargetType!
 }
 
+input CreateSeriesInput {
+  description: String
+  space: PostSpace!
+  title: String!
+}
+
 """
 A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
 """
@@ -119,16 +131,20 @@ input LoginInput {
 
 type Mutation {
   activateUser(userId: ID!): UserModel!
+  addPostToSeries(input: AddPostToSeriesInput!): PostModel!
   adminDeleteComment(commentId: ID!): Boolean!
   adminDeletePost(postId: ID!): Boolean!
+  cancelSchedule(postId: ID!): PostModel!
   changeUserRole(role: UserRole!, userId: ID!): UserModel!
   createCategory(input: CreateCategoryInput!): CategoryModel!
   createComment(input: CreateCommentInput!): CommentModel!
   createPost(input: CreatePostInput!): PostModel!
+  createSeries(input: CreateSeriesInput!): SeriesModel!
   deactivateUser(userId: ID!): UserModel!
   deleteCategory(id: ID!): Boolean!
   deleteComment(id: ID!): Boolean!
   deletePost(id: ID!): Boolean!
+  deleteSeries(seriesId: ID!): Boolean!
   featurePost(featured: Boolean!, postId: ID!): Boolean!
   followUser(userId: ID!): Boolean!
   generatePostSummary(postId: String!): String!
@@ -141,8 +157,10 @@ type Mutation {
   recordPostView(postId: ID!, viewerId: ID): Boolean!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
+  removePostFromSeries(postId: ID!): PostModel!
   reportContent(input: CreateReportInput!): ReportModel!
   reviewReport(input: ReviewReportInput!): ReportModel!
+  schedulePost(postId: ID!, scheduledAt: String!): PostModel!
   toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
   unfollowUser(userId: ID!): Boolean!
@@ -266,6 +284,7 @@ input PostsFilterInput {
 type Query {
   adminReports(cursor: ID, status: ReportStatus): PaginatedReports!
   adminUsers(filter: AdminUsersFilterInput): AdminUsersResult!
+  authorSeries(authorId: ID!): [SeriesModel!]!
   categories(space: PostSpace): [CategoryModel!]!
   category(slug: String!): CategoryModel!
   comments(postId: ID!): [CommentModel!]!
@@ -283,6 +302,7 @@ type Query {
   reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
   relatedPosts(limit: Int, postId: ID!): [PostModel!]!
   search(input: SearchInput!): SearchResult!
+  series(slug: String!): SeriesModel!
   suggestTags(body: String!, title: String!): AiSuggestion!
   suggestTitles(draft: String!): AiSuggestion!
   topPosts(limit: Int): [PostModel!]!
@@ -375,6 +395,19 @@ type SearchResult {
   nextCursor: String
   posts: [PostModel!]!
   totalCount: Int!
+}
+
+type SeriesModel {
+  _id: ID!
+  author: UserModel
+  coverImageUrl: String
+  createdAt: DateTime!
+  description: String
+  postCount: Int!
+  posts: [PostModel!]
+  slug: String!
+  space: PostSpace!
+  title: String!
 }
 
 input ToggleReactionInput {
