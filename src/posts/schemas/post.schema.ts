@@ -132,7 +132,7 @@ export class Post {
   declare series: Types.ObjectId | null;
 
   // Position within the series — 1, 2, 3... for reading order
-  @Prop({ default: null })
+  @Prop({ type: Number, default: null })
   declare seriesOrder: number | null;
 
   @Prop({ type: Date, default: null, index: true })
