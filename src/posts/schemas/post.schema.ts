@@ -105,6 +105,7 @@ export class Post {
         height: { type: Number, required: true },
         alt: { type: String, default: '' },
         order: { type: Number, default: 0 },
+        downloadCount: { type: Number, default: 0 },
       },
     ],
     default: [],
@@ -116,6 +117,7 @@ export class Post {
     height: number;
     alt: string;
     order: number;
+    downloadCount: number;
   }[];
 
   // Open Graph metadata — for rich link previews on FB/Insta/Pinterest
