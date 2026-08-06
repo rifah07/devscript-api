@@ -19,5 +19,8 @@ export class GalleryImageModel {
 
   @Field(() => Int)
   declare order: number;
+
+  @Field(() => Int)
+  declare downloadCount: number;
   // variants is NOT stored in DB — computed on demand via field resolver
 }
