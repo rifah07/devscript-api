@@ -35,6 +35,10 @@ import { memoryStorage } from 'multer';
 import { UploadService } from '../common/services/upload.service';
 import { PostModel } from './models/post.model';
 import { Headers, UnauthorizedException } from '@nestjs/common';
+import { Res } from '@nestjs/common';
+import type { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+import { buildDownloadUrl } from '../common/utils/cloudinary-download.util';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -42,6 +46,7 @@ export class PostsController {
   constructor(
     private readonly postsService: PostsService,
     private readonly uploadService: UploadService,
+    private readonly configService: ConfigService,
   ) {}
 
   @Post()
@@ -197,5 +202,34 @@ export class PostsController {
 
     const publishedCount = await this.postsService.publishDueScheduledPosts();
     return { publishedCount };
+  }
+
+  @Get(':postId/gallery/:publicId/download')
+  @ApiOperation({ summary: 'Download a specific gallery image' })
+  @ApiParam({ name: 'postId' })
+  @ApiParam({ name: 'publicId' })
+  async downloadGalleryImage(
+    @Param('postId') postId: string,
+    @Param('publicId') publicId: string,
+    @Res() res: Response,
+  ) {
+    // Track the download before redirecting
+    await this.postsService.incrementImageDownloadCount(postId, publicId);
+
+    const gallery = await this.postsService.getPostGallery(postId);
+    const image = gallery.images.find((img) => img.publicId === publicId);
+
+    const filename = image?.alt?.trim() || publicId.split('/').pop() || 'image';
+    const cloudName = this.configService.get<string>('cloudinary.cloudName');
+
+    if (!cloudName) {
+      throw new Error('CLOUDINARY_CLOUD_NAME is not configured');
+    }
+
+    const downloadUrl = buildDownloadUrl(cloudName, publicId, filename);
+
+    // 302 redirect straight to Cloudinary's forced-download URL
+    // Browser handles the actual download — we don't proxy the file ourselves
+    res.redirect(302, downloadUrl);
   }
 }
