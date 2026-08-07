@@ -23,6 +23,7 @@ import {
   isValidPostTypeForSpace,
   getDefaultPostType,
 } from './constants/post-type-rules';
+import { PostGalleryModel } from './models/post-gallery.model';
 
 const PAGE_SIZE = 10;
 
@@ -456,6 +457,7 @@ export class PostsService {
       height: result.height,
       alt: '',
       order: post.gallery.length + index,
+      downloadCount: 0,
     }));
 
     post.gallery.push(...newImages);
@@ -491,6 +493,36 @@ export class PostsService {
     await post.save();
     await post.populate(['author', 'category']);
     return this.toModel(post);
+  }
+
+  async getPostGallery(postId: string): Promise<PostGalleryModel> {
+    const post = await this.postModel
+      .findById(postId)
+      .select('title gallery')
+      .lean()
+      .exec();
+
+    if (!post) throw new NotFoundException('Post not found');
+
+    // Always return images sorted by their intended reading order
+    const sortedImages = [...post.gallery].sort((a, b) => a.order - b.order);
+
+    return {
+      postId: post._id.toString(),
+      postTitle: post.title,
+      images: sortedImages,
+    };
+  }
+
+  async incrementImageDownloadCount(
+    postId: string,
+    publicId: string,
+  ): Promise<void> {
+    // $ positional operator updates only the matching array element
+    await this.postModel.updateOne(
+      { _id: postId, 'gallery.publicId': publicId },
+      { $inc: { 'gallery.$.downloadCount': 1 } },
+    );
   }
 
   // Generate Open Graph metadata automatically on publish
