@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 import { AuthorAnalytics } from './models/author-analytics.model';
+import { PostGalleryModel } from './models/post-gallery.model';
 
 @Resolver(() => PostModel)
 export class PostsResolver {
@@ -105,5 +106,21 @@ export class PostsResolver {
     @Args('limit', { type: () => Int, nullable: true }) limit?: number,
   ): Promise<PostModel[]> {
     return this.postsService.getRelatedPosts(postId, limit ?? 5);
+  }
+
+  @Query(() => PostGalleryModel, { name: 'postGallery' })
+  async getPostGallery(
+    @Args('postId', { type: () => ID }) postId: string,
+  ): Promise<PostGalleryModel> {
+    return this.postsService.getPostGallery(postId);
+  }
+
+  @Mutation(() => Boolean)
+  async trackImageDownload(
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('publicId') publicId: string,
+  ): Promise<boolean> {
+    await this.postsService.incrementImageDownloadCount(postId, publicId);
+    return true;
   }
 }
