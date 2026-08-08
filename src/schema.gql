@@ -107,6 +107,8 @@ type FollowStats {
 
 type GalleryImageModel {
   alt: String
+  downloadCount: Int!
+  downloadUrl: String!
   height: Int!
   order: Int!
   publicId: String!
@@ -163,6 +165,7 @@ type Mutation {
   schedulePost(postId: ID!, scheduledAt: String!): PostModel!
   toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
+  trackImageDownload(postId: ID!, publicId: String!): Boolean!
   unfollowUser(userId: ID!): Boolean!
   updateCategory(input: UpdateCategoryInput!): CategoryModel!
   updateComment(input: UpdateCommentInput!): CommentModel!
@@ -227,6 +230,12 @@ type PlatformStats {
   totalPosts: Int!
   totalReactions: Int!
   totalUsers: Int!
+}
+
+type PostGalleryModel {
+  images: [GalleryImageModel!]!
+  postId: ID!
+  postTitle: String!
 }
 
 type PostModel {
@@ -298,6 +307,7 @@ type Query {
   notifications(cursor: ID, unreadOnly: Boolean): PaginatedNotifications!
   platformStats: PlatformStats!
   post(slug: String!): PostModel!
+  postGallery(postId: ID!): PostGalleryModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
   reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
   relatedPosts(limit: Int, postId: ID!): [PostModel!]!
