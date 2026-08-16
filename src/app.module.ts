@@ -27,6 +27,8 @@ import { SeoModule } from './seo/seo.module';
 import { SeriesModule } from './series/series.module';
 import { HealthModule } from './health/health.module';
 import { AccountModule } from './account/account.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -67,6 +69,17 @@ import { AccountModule } from './account/account.module';
       context: (ctx: Record<string, unknown>) => ctx,
     }),
 
+    ThrottlerModule.forRoot([
+      {
+        // Default global limit: 60 requests per minute per IP
+        // This is the SAFETY NET for every route that doesn't
+        // specify its own stricter limit
+        name: 'default',
+        ttl: 60000, // 1 minute in milliseconds
+        limit: 60,
+      },
+    ]),
+
     AuthModule,
     UsersModule,
     PostsModule,
@@ -84,6 +97,13 @@ import { AccountModule } from './account/account.module';
     SeriesModule,
     HealthModule,
     AccountModule,
+  ],
+
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard, // applies to EVERY route globally
+    },
   ],
 })
 export class AppModule {}
