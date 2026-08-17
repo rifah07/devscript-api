@@ -24,6 +24,7 @@ import { UpdateCommentInput } from './dto/update-comment.input';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Comments')
 @Controller('comments')
@@ -32,6 +33,7 @@ export class CommentsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 comments per minute
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Create a comment or reply' })
   @ApiResponse({ status: 201, description: 'Comment created' })

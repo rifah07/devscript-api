@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { GqlContext } from '../common/interfaces/gql-context.interface';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { Throttle } from '@nestjs/throttler';
 
 @ObjectType()
 export class RefreshResponse {
@@ -22,6 +23,7 @@ export class AuthResolver {
   constructor(private readonly authService: AuthService) {}
 
   @Mutation(() => AuthResponse)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   async register(
     @Args('registerInput') registerInput: RegisterInput,
     @Context() context: GqlContext,
@@ -33,6 +35,7 @@ export class AuthResolver {
   }
 
   @Mutation(() => AuthResponse)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async login(
     @Args('loginInput') loginInput: LoginInput,
     @Context() context: GqlContext,

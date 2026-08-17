@@ -7,6 +7,7 @@ import { CreateReportInput } from './dto/create-report.input';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { Throttle } from '@nestjs/throttler';
 
 // Separate resolver for public-facing mutations — no admin role required
 @Resolver()
@@ -15,6 +16,7 @@ export class AdminPublicResolver {
 
   @Mutation(() => ReportModel)
   @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 300000 } }) // 5 reports per 5 minutes
   async reportContent(
     @Args('input') input: CreateReportInput,
     @CurrentUser() user: UserDocument,
