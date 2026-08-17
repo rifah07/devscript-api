@@ -3,11 +3,27 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import helmet from 'helmet';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(cookieParser());
+
+  // Helmet sets ~15 security-related HTTP headers in one call.
+  // Must come early in the middleware chain — before routes are registered.
+  app.use(
+    helmet({
+      // Content-Security-Policy needs custom config because Apollo Sandbox
+      // (GraphQL playground) needs to load its own scripts/styles.
+      // Without this override, Helmet's strict default CSP would break
+      // the GraphQL playground UI in development.
+      contentSecurityPolicy:
+        process.env.NODE_ENV === 'production'
+          ? undefined // use Helmet's strict defaults in production
+          : false, // disable CSP in dev so Apollo Sandbox works freely
+    }),
+  );
 
   // ─── Global Validation Pipe ─────────────────────────────────────────────
   // This enables class-validator decorators on ALL DTOs globally.
