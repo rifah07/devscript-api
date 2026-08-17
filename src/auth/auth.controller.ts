@@ -16,6 +16,7 @@ import { RegisterInput } from './dto/register.input';
 import { LoginInput } from './dto/login.input';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { TypedRequest } from '../common/interfaces/typed-request.interface';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -23,6 +24,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ default: { limit: 3, ttl: 60000 } }) // 3 registrations per minute per IP
   async register(
     @Body() dto: RegisterInput,
     @Res({ passthrough: true }) res: Response,
@@ -36,6 +38,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } }) // 5 attempts per minute
   @ApiOperation({ summary: 'Login with email and password' })
   async login(
     @Body() dto: LoginInput,
@@ -50,6 +53,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token using cookie' })
   async refresh(
     @Req() req: TypedRequest,
