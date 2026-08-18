@@ -27,8 +27,9 @@ import { SeoModule } from './seo/seo.module';
 import { SeriesModule } from './series/series.module';
 import { HealthModule } from './health/health.module';
 import { AccountModule } from './account/account.module';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 
 @Module({
   imports: [
@@ -102,7 +103,7 @@ import { APP_GUARD } from '@nestjs/core';
   providers: [
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard, // applies to EVERY route globally
+      useClass: CustomThrottlerGuard,
     },
   ],
 })
