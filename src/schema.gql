@@ -99,6 +99,10 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+input DeleteAccountInput {
+  password: String!
+}
+
 type FollowStats {
   followersCount: Int!
   followingCount: Int!
@@ -126,6 +130,11 @@ type ImageVariants {
   thumbnail: String!
 }
 
+"""
+Arbitrary JSON value — used for endpoints returning unstructured data like account exports.
+"""
+scalar JSON
+
 input LoginInput {
   email: String!
   password: String!
@@ -145,6 +154,7 @@ type Mutation {
   deactivateUser(userId: ID!): UserModel!
   deleteCategory(id: ID!): Boolean!
   deleteComment(id: ID!): Boolean!
+  deleteMyAccount(input: DeleteAccountInput!): Boolean!
   deletePost(id: ID!): Boolean!
   deleteSeries(seriesId: ID!): Boolean!
   featurePost(featured: Boolean!, postId: ID!): Boolean!
@@ -297,6 +307,7 @@ type Query {
   categories(space: PostSpace): [CategoryModel!]!
   category(slug: String!): CategoryModel!
   comments(postId: ID!): [CommentModel!]!
+  exportMyData: JSON!
   followStats(currentUserId: ID, userId: ID!): FollowStats!
   followers(cursor: ID, userId: ID!): PaginatedUsers!
   following(cursor: ID, userId: ID!): PaginatedUsers!
