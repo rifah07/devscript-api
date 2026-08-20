@@ -30,6 +30,7 @@ import { AccountModule } from './account/account.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
+import emailConfig from './config/email.config';
 
 @Module({
   imports: [
@@ -38,7 +39,14 @@ import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
     // in every module — it's available everywhere.
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, cloudinaryConfig, seoConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        jwtConfig,
+        cloudinaryConfig,
+        seoConfig,
+        emailConfig,
+      ],
       envFilePath: '.env',
     }),
 
