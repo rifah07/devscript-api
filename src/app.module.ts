@@ -31,6 +31,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 import emailConfig from './config/email.config';
+import { NewsletterModule } from './newsletter/newsletter.module';
+import { EmailModule } from './email/email.module';
 
 @Module({
   imports: [
@@ -106,6 +108,8 @@ import emailConfig from './config/email.config';
     SeriesModule,
     HealthModule,
     AccountModule,
+    EmailModule,
+    NewsletterModule,
   ],
 
   providers: [
