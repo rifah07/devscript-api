@@ -13,6 +13,7 @@ import { GalleryImageResolver } from './resolvers/gallery-image.resolver';
 import { PostCoverImageResolver } from './resolvers/post-cover-image.resolver';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PostsCronService } from './posts.cron';
+import { NewsletterModule } from '../newsletter/newsletter.module';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { PostGalleryModel } from './models/post-gallery.model';
 // PostGalleryModel doesn't need separate registration —
@@ -29,6 +30,7 @@ import { PostGalleryModel } from './models/post-gallery.model';
     GalleryImageResolver,
     PostCoverImageResolver,
     ScheduleModule.forRoot(), // enables @Cron() decorators
+    NewsletterModule,
   ],
   providers: [PostsService, PostsResolver, PostsCronService],
   controllers: [PostsController],

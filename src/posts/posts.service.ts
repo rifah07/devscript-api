@@ -24,6 +24,7 @@ import {
   getDefaultPostType,
 } from './constants/post-type-rules';
 import { PostGalleryModel } from './models/post-gallery.model';
+import { NewsletterService } from '../newsletter/newsletter.service';
 
 const PAGE_SIZE = 10;
 
@@ -34,6 +35,7 @@ export class PostsService {
     private readonly notificationsService: NotificationsService,
     private readonly followsService: FollowsService,
     private readonly categoriesService: CategoriesService,
+    private readonly newsletterService: NewsletterService,
   ) {}
 
   async create(
@@ -204,6 +206,15 @@ export class PostsService {
           postTitle: post.title,
         }),
       );
+
+    // email every confirmed newsletter subscriber of this space
+    // Fire and forget - publishing should never wait on email delivery
+    void this.newsletterService.notifySubscribersOfNewPost(
+      post.space,
+      post.title,
+      post.summary || post.body.slice(0, 150),
+      post.slug,
+    );
     return result;
   }
 
