@@ -10,6 +10,11 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+export enum AuthProvider {
+  LOCAL = 'local',
+  GOOGLE = 'google',
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({
@@ -24,8 +29,19 @@ export class User {
   @Prop({ required: true, minlength: 2, maxlength: 50 })
   declare name: string;
 
-  @Prop({ required: true, select: false })
+  @Prop({ enum: AuthProvider, default: AuthProvider.LOCAL })
+  declare authProvider: AuthProvider;
+
+  @Prop({
+    required: function (this: User) {
+      return this.authProvider === AuthProvider.LOCAL;
+    },
+    select: false,
+  })
   declare password: string;
+
+  @Prop({ default: null, index: true, sparse: true })
+  declare googleId: string | null;
 
   @Prop({ enum: UserRole, default: UserRole.USER })
   declare role: UserRole;
