@@ -17,6 +17,7 @@ import {
 import { RegisterInput } from './dto/register.input';
 import { LoginInput } from './dto/login.input';
 import { AuthResponse } from './dto/auth-response.model';
+import { GoogleProfile } from './strategies/google.strategy';
 
 interface JwtPayload {
   sub: string;
@@ -62,6 +63,27 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    return this.generateAuthResponse(
+      user._id.toString(),
+      user.email,
+      user,
+      userAgent,
+    );
+  }
+
+  async loginWithGoogle(
+    profile: GoogleProfile,
+    userAgent = '',
+  ): Promise<AuthResponse> {
+    const user = await this.usersService.findOrCreateFromGoogle(profile);
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+
+    // Reuse the exact same token generation as normal login/register -
+    // Google users get identical access/refresh tokens, indistinguishable
+    // from local auth users once logged in
     return this.generateAuthResponse(
       user._id.toString(),
       user.email,
