@@ -15,6 +15,8 @@ import {
   RefreshToken,
   RefreshTokenSchema,
 } from './schemas/refresh-token.schema';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 
 @Module({
   imports: [
@@ -42,7 +44,14 @@ import {
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, AuthResolver, JwtStrategy, JwtAuthGuard],
+  providers: [
+    AuthService,
+    AuthResolver,
+    JwtStrategy,
+    JwtAuthGuard,
+    GoogleStrategy,
+    GoogleAuthGuard,
+  ],
   controllers: [AuthController],
   exports: [JwtAuthGuard],
 })
