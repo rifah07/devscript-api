@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
   Res,
   HttpCode,
@@ -17,6 +18,9 @@ import { LoginInput } from './dto/login.input';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import type { TypedRequest } from '../common/interfaces/typed-request.interface';
 import { Throttle } from '@nestjs/throttler';
+import { Query } from '@nestjs/common';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
+import type { GoogleProfile } from './strategies/google.strategy';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -49,6 +53,45 @@ export class AuthController {
     const result = await this.authService.login(dto, userAgent);
     this.setRefreshCookie(res, result.refreshToken ?? '');
     return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Get('google')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({ summary: 'Redirect to Google OAuth consent screen' })
+  googleLogin(): void {
+    // This route's body never executes — GoogleAuthGuard intercepts
+    // the request and redirects to Google before we get here
+  }
+
+  @Get('google/callback')
+  @UseGuards(GoogleAuthGuard)
+  @ApiOperation({
+    summary: 'Google OAuth callback — exchanges code for tokens',
+  })
+  async googleCallback(
+    @Req() req: TypedRequest & { user: GoogleProfile },
+    @Res() res: Response,
+    @Query('state') state?: string, // optional — carries which frontend/space initiated login
+  ) {
+    const userAgent = req.headers['user-agent'];
+    const ua = Array.isArray(userAgent) ? userAgent[0] : userAgent;
+
+    const result = await this.authService.loginWithGoogle(req.user, ua ?? '');
+
+    this.setRefreshCookie(res, result.refreshToken ?? '');
+
+    // Redirect back to the frontend with the access token as a query param.
+    // The frontend reads it once from the URL, stores it in memory, then
+    // should immediately clean the URL (history.replaceState) so the token
+    // doesn't linger in browser history or get shared accidentally.
+    const redirectBase =
+      state === 'personal'
+        ? (process.env.MISK_JOURNAL_URL ?? 'http://localhost:5173')
+        : (process.env.DEVSCRIPT_URL ?? 'http://localhost:3000');
+
+    res.redirect(
+      `${redirectBase}/auth/callback?accessToken=${result.accessToken}`,
+    );
   }
 
   @Post('refresh')
