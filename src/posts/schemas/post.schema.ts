@@ -133,12 +133,25 @@ export class Post {
   @Prop({ type: Types.ObjectId, ref: 'Series', default: null, index: true })
   declare series: Types.ObjectId | null;
 
-  // Position within the series — 1, 2, 3... for reading order
+  // Position within the series - 1, 2, 3... for reading order
   @Prop({ type: Number, default: null })
   declare seriesOrder: number | null;
 
   @Prop({ type: Date, default: null, index: true })
   declare scheduledAt: Date | null;
+
+  @Prop({ default: '' })
+  declare narrationUrl: string;
+
+  @Prop({ default: '' })
+  declare narrationPublicId: string;
+
+  // Duration in seconds - useful for the frontend audio player UI
+  @Prop({ default: 0 })
+  declare narrationDuration: number;
+
+  @Prop({ type: Date, default: null })
+  declare narrationGeneratedAt: Date | null;
 
   @Prop()
   declare createdAt: Date;
