@@ -63,6 +63,22 @@ export class UploadService {
     };
   }
 
+  async uploadNarrationAudio(
+    audioBuffer: Buffer,
+    postId: string,
+  ): Promise<{ url: string; publicId: string }> {
+    const result = await this.uploadAudioStream(audioBuffer, {
+      folder: 'devscript/narrations',
+      resource_type: 'video', // Cloudinary's quirk — audio uses the video pipeline
+      public_id: `narration-${postId}-${Date.now()}`,
+    });
+
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+    };
+  }
+
   async deleteFile(publicId: string): Promise<void> {
     await cloudinary.uploader.destroy(publicId);
   }
@@ -96,6 +112,30 @@ export class UploadService {
           if (!result) {
             return reject(new Error('Upload failed — no result returned'));
           }
+          resolve(result);
+        },
+      );
+
+      const readable = new Readable();
+      readable.push(buffer);
+      readable.push(null);
+      readable.pipe(stream);
+    });
+  }
+
+  private uploadAudioStream(
+    buffer: Buffer,
+    options: Record<string, unknown>,
+  ): Promise<UploadApiResponse> {
+    return new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        options,
+        (error, result) => {
+          if (error) return reject(new Error(error.message));
+          if (!result)
+            return reject(
+              new Error('Audio upload failed — no result returned'),
+            );
           resolve(result);
         },
       );
