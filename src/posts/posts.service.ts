@@ -25,6 +25,8 @@ import {
 } from './constants/post-type-rules';
 import { PostGalleryModel } from './models/post-gallery.model';
 import { NewsletterService } from '../newsletter/newsletter.service';
+import { TtsService } from '../ai/tts.service';
+import { PostSpace } from './schemas/post.schema';
 
 const PAGE_SIZE = 10;
 
@@ -36,6 +38,7 @@ export class PostsService {
     private readonly followsService: FollowsService,
     private readonly categoriesService: CategoriesService,
     private readonly newsletterService: NewsletterService,
+    private readonly ttsService: TtsService,
   ) {}
 
   async create(
@@ -265,6 +268,49 @@ export class PostsService {
         { $inc: { viewCount: 1 } },
       );
     }
+  }
+
+  async generateNarration(
+    postId: string,
+    requestor: UserDocument,
+    ttsService: TtsService,
+    uploadService: UploadService,
+  ): Promise<PostModel> {
+    const post = await this.postModel.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    this.assertIsAuthorOrAdmin(post, requestor);
+
+    // Narration only makes sense for shorter, reflective content —
+    // not long technical articles with code blocks
+    if (post.space !== PostSpace.PERSONAL) {
+      throw new BadRequestException(
+        'Narration is only available for The Misk Journal (personal space) posts',
+      );
+    }
+
+    const text = ttsService.prepareTextForNarration(post.title, post.body);
+    const narration = await ttsService.generateNarration(text);
+
+    // Delete the old narration file if regenerating
+    if (post.narrationPublicId) {
+      await uploadService.deleteFile(post.narrationPublicId);
+    }
+
+    const uploaded = await uploadService.uploadNarrationAudio(
+      narration.audioBuffer,
+      postId,
+    );
+
+    post.narrationUrl = uploaded.url;
+    post.narrationPublicId = uploaded.publicId;
+    post.narrationDuration = narration.estimatedDurationSeconds;
+    post.narrationGeneratedAt = new Date();
+
+    await post.save();
+    await post.populate(['author', 'category']);
+
+    return this.toModel(post);
   }
 
   async schedulePost(
