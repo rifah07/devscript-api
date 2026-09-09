@@ -70,6 +70,15 @@ export class PostModel {
   @Field({ nullable: true })
   declare ogImage?: string;
 
+  @Field({ nullable: true })
+  declare narrationUrl?: string;
+
+  @Field(() => Int, { nullable: true })
+  declare narrationDuration?: number;
+
+  @Field({ nullable: true })
+  declare narrationGeneratedAt?: Date;
+
   @Field()
   declare createdAt: Date;
 

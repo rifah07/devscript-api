@@ -637,6 +637,9 @@ export class PostsService {
       ogTitle: doc.ogTitle,
       ogDescription: doc.ogDescription,
       ogImage: doc.ogImage,
+      narrationUrl: doc.narrationUrl || undefined,
+      narrationDuration: doc.narrationDuration || undefined,
+      narrationGeneratedAt: doc.narrationGeneratedAt || undefined,
       author:
         author && typeof author === 'object' && '_id' in author
           ? (author as unknown as PostModel['author'])
