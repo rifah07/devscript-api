@@ -40,7 +40,7 @@ export class User {
   })
   declare password: string;
 
-  @Prop({ default: null, index: true, sparse: true })
+  @Prop({ type: String, default: null, index: true, sparse: true })
   declare googleId: string | null;
 
   @Prop({ enum: UserRole, default: UserRole.USER })
