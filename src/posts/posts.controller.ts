@@ -39,6 +39,7 @@ import { Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { buildDownloadUrl } from '../common/utils/cloudinary-download.util';
+import { TtsService } from '../ai/tts.service';
 
 @ApiTags('Posts')
 @Controller('posts')
@@ -47,6 +48,7 @@ export class PostsController {
     private readonly postsService: PostsService,
     private readonly uploadService: UploadService,
     private readonly configService: ConfigService,
+    private readonly ttsService: TtsService,
   ) {}
 
   @Post()
@@ -231,5 +233,25 @@ export class PostsController {
     // 302 redirect straight to Cloudinary's forced-download URL
     // Browser handles the actual download — we don't proxy the file ourselves
     res.redirect(302, downloadUrl);
+  }
+
+  @Post(':id/narration')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Generate AI narration for a poem/reflection (Misk Journal only)',
+  })
+  @ApiParam({ name: 'id' })
+  generateNarration(
+    @Param('id') postId: string,
+    @CurrentUser() user: UserDocument,
+  ): Promise<PostModel> {
+    return this.postsService.generateNarration(
+      postId,
+      user,
+      this.ttsService,
+      this.uploadService,
+    );
   }
 }

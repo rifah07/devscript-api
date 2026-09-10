@@ -1,6 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID, Int } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
-
 import { PostsService } from './posts.service';
 import { PostModel, PaginatedPosts } from './models/post.model';
 import { CreatePostInput } from './dto/create-post.input';
@@ -11,10 +10,16 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 import { AuthorAnalytics } from './models/author-analytics.model';
 import { PostGalleryModel } from './models/post-gallery.model';
+import { TtsService } from '../ai/tts.service';
+import { UploadService } from '../common/services/upload.service';
 
 @Resolver(() => PostModel)
 export class PostsResolver {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(
+    private readonly postsService: PostsService,
+    private readonly ttsService: TtsService,
+    private readonly uploadService: UploadService,
+  ) {}
 
   @Mutation(() => PostModel)
   @UseGuards(JwtAuthGuard)
@@ -90,6 +95,20 @@ export class PostsResolver {
     @CurrentUser() user: UserDocument,
   ): Promise<PostModel> {
     return this.postsService.cancelSchedule(postId, user);
+  }
+
+  @Mutation(() => PostModel)
+  @UseGuards(JwtAuthGuard)
+  async generateNarration(
+    @Args('postId', { type: () => ID }) postId: string,
+    @CurrentUser() user: UserDocument,
+  ): Promise<PostModel> {
+    return this.postsService.generateNarration(
+      postId,
+      user,
+      this.ttsService,
+      this.uploadService,
+    );
   }
 
   @Query(() => AuthorAnalytics, { name: 'myAnalytics' })

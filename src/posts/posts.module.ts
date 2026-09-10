@@ -16,7 +16,8 @@ import { PostsCronService } from './posts.cron';
 import { NewsletterModule } from '../newsletter/newsletter.module';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { PostGalleryModel } from './models/post-gallery.model';
-// PostGalleryModel doesn't need separate registration —
+import { TtsService } from '../ai/tts.service';
+// PostGalleryModel doesn't need separate registration -
 // it's automatically picked up since it's used as a return type
 // in PostsResolver, which is already a provider.
 
@@ -32,7 +33,14 @@ import { PostGalleryModel } from './models/post-gallery.model';
     ScheduleModule.forRoot(), // enables @Cron() decorators
     NewsletterModule,
   ],
-  providers: [PostsService, PostsResolver, PostsCronService],
+  providers: [
+    PostsService,
+    PostsResolver,
+    PostsCronService,
+    GalleryImageResolver,
+    PostCoverImageResolver,
+    TtsService,
+  ],
   controllers: [PostsController],
   exports: [PostsService], // export for AiModule
 })
