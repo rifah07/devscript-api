@@ -147,6 +147,7 @@ type Mutation {
   adminDeletePost(postId: ID!): Boolean!
   cancelSchedule(postId: ID!): PostModel!
   changeUserRole(role: UserRole!, userId: ID!): UserModel!
+  confirmSubscription(token: String!): Boolean!
   createCategory(input: CreateCategoryInput!): CategoryModel!
   createComment(input: CreateCommentInput!): CommentModel!
   createPost(input: CreatePostInput!): PostModel!
@@ -159,6 +160,7 @@ type Mutation {
   deleteSeries(seriesId: ID!): Boolean!
   featurePost(featured: Boolean!, postId: ID!): Boolean!
   followUser(userId: ID!): Boolean!
+  generateNarration(postId: ID!): PostModel!
   generatePostSummary(postId: String!): String!
   login(loginInput: LoginInput!): AuthResponse!
   logout: Boolean!
@@ -173,10 +175,12 @@ type Mutation {
   reportContent(input: CreateReportInput!): ReportModel!
   reviewReport(input: ReviewReportInput!): ReportModel!
   schedulePost(postId: ID!, scheduledAt: String!): PostModel!
+  subscribeToNewsletter(input: SubscribeInput!): Boolean!
   toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
   trackImageDownload(postId: ID!, publicId: String!): Boolean!
   unfollowUser(userId: ID!): Boolean!
+  unsubscribeFromNewsletter(token: String!): Boolean!
   updateCategory(input: UpdateCategoryInput!): CategoryModel!
   updateComment(input: UpdateCommentInput!): CommentModel!
   updatePost(input: UpdatePostInput!): PostModel!
@@ -258,6 +262,9 @@ type PostModel {
   coverImageVariants: ImageVariants
   createdAt: DateTime!
   gallery: [GalleryImageModel!]!
+  narrationDuration: Int
+  narrationGeneratedAt: DateTime
+  narrationUrl: String
   ogDescription: String
   ogImage: String
   ogTitle: String
@@ -315,6 +322,7 @@ type Query {
   me: UserModel!
   myAnalytics: AuthorAnalytics!
   myBookmarks(cursor: ID): PaginatedPosts!
+  newsletterSubscriberCount(space: PostSpace!): Int!
   notifications(cursor: ID, unreadOnly: Boolean): PaginatedNotifications!
   platformStats: PlatformStats!
   post(slug: String!): PostModel!
@@ -429,6 +437,11 @@ type SeriesModel {
   slug: String!
   space: PostSpace!
   title: String!
+}
+
+input SubscribeInput {
+  email: String!
+  space: PostSpace!
 }
 
 input ToggleReactionInput {
