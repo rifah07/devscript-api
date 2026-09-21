@@ -15,6 +15,9 @@ import {
 import { SubscribeInput } from './dto/subscribe.input';
 import { PostSpace } from '../posts/schemas/post.schema';
 import { EmailService } from '../email/email.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { EMAIL_QUEUE } from '../queue/queue.module';
 
 @Injectable()
 export class NewsletterService {
@@ -23,6 +26,7 @@ export class NewsletterService {
     private readonly subscriberModel: Model<NewsletterSubscriberDocument>,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
+    @InjectQueue(EMAIL_QUEUE) private readonly emailQueue: Queue,
   ) {}
 
   async subscribe(input: SubscribeInput): Promise<boolean> {
@@ -79,8 +83,6 @@ export class NewsletterService {
     return true;
   }
 
-  // Called by PostsService when a post is published — sends to every
-  // confirmed subscriber of that space
   async notifySubscribersOfNewPost(
     space: PostSpace,
     postTitle: string,
@@ -98,26 +100,26 @@ export class NewsletterService {
     const siteName = this.getSiteName(space);
     const postUrl = `${baseUrl}/posts/${postSlug}`;
 
-    // Send in small batches to avoid hammering the email API with
-    // hundreds of simultaneous requests if the subscriber list grows large
-    const BATCH_SIZE = 20;
-    for (let i = 0; i < subscribers.length; i += BATCH_SIZE) {
-      const batch = subscribers.slice(i, i + BATCH_SIZE);
+    // Instead of sending inline, add ONE job per subscriber to the queue.
+    // This returns almost instantly - actual sending happens in the
+    // background worker, with automatic retries if Resend has a hiccup.
+    const jobs = subscribers.map((subscriber) => ({
+      name: 'send-new-post-email',
+      data: {
+        to: subscriber.email,
+        siteName,
+        postTitle,
+        postSummary,
+        postUrl,
+        unsubscribeUrl: `${baseUrl}/unsubscribe?token=${subscriber.token}`,
+      },
+      opts: {
+        attempts: 3, // retry up to 3 times on failure
+        backoff: { type: 'exponential', delay: 5000 }, // 5s, 10s, 20s between retries
+      },
+    }));
 
-      await Promise.all(
-        batch.map((subscriber) => {
-          const unsubscribeUrl = `${baseUrl}/unsubscribe?token=${subscriber.token}`;
-          return this.emailService.sendNewPostEmail(
-            subscriber.email,
-            siteName,
-            postTitle,
-            postSummary,
-            postUrl,
-            unsubscribeUrl,
-          );
-        }),
-      );
-    }
+    await this.emailQueue.addBulk(jobs);
   }
 
   async getSubscriberCount(space: PostSpace): Promise<number> {
