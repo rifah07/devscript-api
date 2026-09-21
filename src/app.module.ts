@@ -33,6 +33,7 @@ import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 import emailConfig from './config/email.config';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { EmailModule } from './email/email.module';
+import { QueueModule } from './queue/queue.module';
 
 @Module({
   imports: [
@@ -110,6 +111,7 @@ import { EmailModule } from './email/email.module';
     AccountModule,
     EmailModule,
     NewsletterModule,
+    QueueModule,
   ],
 
   providers: [
