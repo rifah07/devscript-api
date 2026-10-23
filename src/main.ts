@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -7,39 +8,21 @@ import express from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const isProd = process.env.NODE_ENV === 'production';
 
+  // Behind Vercel/Render's proxy every request arrives from the proxy's IP.
+  // Trusting one hop makes req.ip the real client, so rate limits are per user.
+  app.set('trust proxy', 1);
+
+  // Helmet sets ~15 security headers. CSP is off in dev so Apollo Sandbox loads.
+  app.use(helmet({ contentSecurityPolicy: isProd ? undefined : false }));
   app.use(cookieParser());
-  app.use(
-    helmet({
-      contentSecurityPolicy:
-        process.env.NODE_ENV === 'production' ? undefined : false,
-    }),
-  );
-
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-  // Helmet sets ~15 security-related HTTP headers in one call.
-  // Must come early in the middleware chain — before routes are registered.
-  app.use(
-    helmet({
-      // Content-Security-Policy needs custom config because Apollo Sandbox
-      // (GraphQL playground) needs to load its own scripts/styles.
-      // Without this override, Helmet's strict default CSP would break
-      // the GraphQL playground UI in development.
-      contentSecurityPolicy:
-        process.env.NODE_ENV === 'production'
-          ? undefined // use Helmet's strict defaults in production
-          : false, // disable CSP in dev so Apollo Sandbox works freely
-    }),
-  );
-
-  // ─── Global Validation Pipe ─────────────────────────────────────────────
-  // This enables class-validator decorators on ALL DTOs globally.
-  // whitelist: strips unknown properties from requests (security!)
-  // forbidNonWhitelisted: throws error if unknown props are sent
-  // transform: auto-converts types (e.g. string "3" → number 3)
+  // whitelist strips unknown props, forbidNonWhitelisted rejects them: blocks
+  // mass assignment like sending `role: "ADMIN"` to updateProfile.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -48,53 +31,41 @@ async function bootstrap() {
     }),
   );
 
-  // ─── CORS ────────────────────────────────────────────────────────────────
+  // Browsers reach the API through each frontend's same-origin /api proxy, so
+  // CORS only needs the two sites (and their dev ports).
+  const allowedOrigins = [
+    process.env.DEVSCRIPT_URL,
+    process.env.MISK_JOURNAL_URL,
+  ];
+  if (!isProd)
+    allowedOrigins.push('http://localhost:3001', 'http://localhost:3002');
   app.enableCors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void,
-    ): void => {
-      if (!origin) {
-        callback(null, true);
-        return;
-      }
-
-      const allowedOrigins =
-        process.env.NODE_ENV === 'production'
-          ? [
-              process.env.DEVSCRIPT_URL ?? 'https://devscript.com',
-              process.env.MISK_JOURNAL_URL ?? 'https://themiskjournal.com',
-            ]
-          : ['http://localhost:3000', 'http://localhost:5173'];
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-        return;
-      }
-
-      callback(new Error(`Origin ${origin} not allowed by CORS`), false);
-    },
+    origin: allowedOrigins.filter(Boolean) as string[],
     credentials: true,
   });
 
-  // ─── Swagger / OpenAPI ───────────────────────────────────────────────────
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('DevScript API')
-    .setDescription('AI-Powered Developer Blogging Platform')
-    .setVersion('1.0')
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'JWT',
-    )
-    .build();
+  // Swagger documents every route for attackers too, so it is dev-only.
+  if (!isProd) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('DevScript API')
+      .setDescription('AI-Powered Developer Blogging Platform')
+      .setVersion('1.0')
+      .addBearerAuth(
+        { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+        'JWT',
+      )
+      .build();
+    SwaggerModule.setup(
+      'api/docs',
+      app,
+      SwaggerModule.createDocument(app, swaggerConfig),
+    );
+  }
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  app.enableShutdownHooks();
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`DevScript API running on port ${port}`);
-  console.log(`Swagger docs: http://localhost:${port}/api/docs`);
-  console.log(`GraphQL playground: http://localhost:${port}/graphql`);
 }
-bootstrap();
+void bootstrap();
