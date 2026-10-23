@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { NotificationsService } from '../notifications/notifications.service';
 
 import {
   Reaction,
@@ -10,12 +11,18 @@ import {
 import { ReactionSummary } from './models/reaction.model';
 import { ToggleReactionInput } from './dto/toggle-reaction.input';
 import type { UserDocument } from '../users/schemas/user.schema';
+import { Post, PostDocument, PostStatus } from '../posts/schemas/post.schema';
+import { Comment, CommentDocument } from '../comments/schemas/comment.schema';
 
 @Injectable()
 export class ReactionsService {
   constructor(
     @InjectModel(Reaction.name)
     private readonly reactionModel: Model<ReactionDocument>,
+    @InjectModel(Post.name) private readonly postModel: Model<PostDocument>,
+    @InjectModel(Comment.name)
+    private readonly commentModel: Model<CommentDocument>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async toggle(
@@ -36,11 +43,39 @@ export class ReactionsService {
       return false; // false = reaction removed
     }
 
-    // Toggle on - add the reaction
+    // Toggle on: the target must exist (and a post must be published),
+    // otherwise any id would leave an orphan reaction behind.
+    const isPost = input.targetType === ReactionTargetType.POST;
+    const post = isPost
+      ? await this.postModel
+          .findOne({ _id: input.targetId, status: PostStatus.PUBLISHED })
+          .select('author title')
+          .lean()
+      : null;
+    const exists = isPost
+      ? !!post
+      : !!(await this.commentModel.exists({
+          _id: input.targetId,
+          isDeleted: false,
+        }));
+    if (!exists) throw new NotFoundException('Target not found');
+
     await this.reactionModel.create({
       ...filter,
       targetType: input.targetType,
     });
+
+    // Tell the author someone appreciated their post (never yourself).
+    if (post) {
+      await this.notificationsService
+        .notifyPostReaction({
+          recipient: post.author.toString(),
+          actor: user,
+          postId: input.targetId,
+          postTitle: post.title,
+        })
+        .catch(() => undefined);
+    }
 
     return true; // true = reaction added
   }

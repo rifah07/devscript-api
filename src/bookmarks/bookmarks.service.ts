@@ -1,10 +1,16 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { toPostModel } from '../posts/utils/post.mapper';
+import { publicUser } from '../users/public-user-fields';
 
 import { Bookmark, BookmarkDocument } from './schemas/bookmark.schema';
-import { Post, PostDocument } from '../posts/schemas/post.schema';
-import { PostModel, PaginatedPosts } from '../posts/models/post.model';
+import { Post, PostDocument, PostStatus } from '../posts/schemas/post.schema';
+import { PaginatedPosts } from '../posts/models/post.model';
 import type { UserDocument } from '../users/schemas/user.schema';
 
 const PAGE_SIZE = 10;
@@ -36,18 +42,24 @@ export class BookmarksService {
       return false; // removed
     }
 
-    // Add bookmark — increment cached count
+    // Only published posts can be bookmarked; hidden ones look missing.
+    const post = await this.postModel.exists({
+      _id: postId,
+      status: PostStatus.PUBLISHED,
+    });
+    if (!post) throw new NotFoundException('Post not found');
+
+    // Add bookmark, then increment the cached count. Sequential on purpose:
+    // if the insert fails as a duplicate, the count must not move.
     try {
-      await Promise.all([
-        this.bookmarkModel.create({
-          user: user._id,
-          post: new Types.ObjectId(postId),
-        }),
-        this.postModel.updateOne(
-          { _id: postId },
-          { $inc: { bookmarksCount: 1 } },
-        ),
-      ]);
+      await this.bookmarkModel.create({
+        user: user._id,
+        post: new Types.ObjectId(postId),
+      });
+      await this.postModel.updateOne(
+        { _id: postId },
+        { $inc: { bookmarksCount: 1 } },
+      );
       return true; // added
     } catch (error: unknown) {
       if (
@@ -78,7 +90,11 @@ export class BookmarksService {
       .limit(PAGE_SIZE + 1)
       .populate({
         path: 'post',
-        populate: { path: 'author' }, // nested populate — post's author
+        // A bookmarked post can later be unpublished (e.g. its author deleted
+        // their account). Unpublished means private: never return its body.
+        match: { status: PostStatus.PUBLISHED },
+        select: '-uniqueViewers -embedding',
+        populate: publicUser('author'), // nested populate — post's author
       })
       .lean()
       .exec();
@@ -93,7 +109,7 @@ export class BookmarksService {
       posts: sliced
         .map((b) => b.post as unknown as PostDocument)
         .filter(Boolean)
-        .map((p) => this.toPostModel(p)),
+        .map((p) => toPostModel(p)),
       nextCursor: hasNextPage
         ? sliced[sliced.length - 1]?._id.toString()
         : undefined,
@@ -111,29 +127,4 @@ export class BookmarksService {
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
-
-  private toPostModel(doc: PostDocument): PostModel {
-    const author = doc.author;
-    return {
-      _id: doc._id.toString(),
-      title: doc.title,
-      slug: doc.slug,
-      body: doc.body,
-      summary: doc.summary,
-      tags: doc.tags,
-      space: doc.space,
-      postType: doc.postType,
-      gallery: doc.gallery,
-      author:
-        author && typeof author === 'object' && '_id' in author
-          ? (author as unknown as PostModel['author'])
-          : undefined,
-      status: doc.status,
-      readTime: doc.readTime,
-      viewCount: doc.viewCount,
-      bookmarksCount: doc.bookmarksCount,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-    };
-  }
 }

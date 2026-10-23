@@ -1,4 +1,5 @@
 import { Resolver, Mutation, Args, Query, Int } from '@nestjs/graphql';
+import { Throttle } from '@nestjs/throttler';
 import { NewsletterService } from './newsletter.service';
 import { SubscribeInput } from './dto/subscribe.input';
 import { PostSpace } from '../posts/schemas/post.schema';
@@ -7,7 +8,10 @@ import { PostSpace } from '../posts/schemas/post.schema';
 export class NewsletterResolver {
   constructor(private readonly newsletterService: NewsletterService) {}
 
+  // Same limit as REST: each call emails an address someone typed in, so an
+  // unthrottled mutation lets anyone use our sender to flood inboxes.
   @Mutation(() => Boolean)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async subscribeToNewsletter(
     @Args('input') input: SubscribeInput,
   ): Promise<boolean> {

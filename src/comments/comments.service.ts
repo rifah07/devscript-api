@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { publicUser } from '../users/public-user-fields';
 
 import { Comment, CommentDocument } from './schemas/comment.schema';
 import { CommentModel } from './models/comment.model';
@@ -29,11 +30,17 @@ export class CommentsService {
     input: CreateCommentInput,
     author: UserDocument,
   ): Promise<CommentModel> {
-    // If replying, validate the parent exists and is a top-level comment
-    if (input.parentId) {
-      const parent = await this.commentModel.findById(input.parentId);
+    // Validate everything BEFORE writing: commenting on a draft or missing
+    // post must not leave an orphan comment behind. 404 for hidden posts.
+    const post = await this.postsService.findPublished(input.postId);
 
-      if (!parent) throw new NotFoundException('Parent comment not found');
+    // If replying, validate the parent exists and is a top-level comment
+    let parent: CommentDocument | null = null;
+    if (input.parentId) {
+      parent = await this.commentModel.findById(input.parentId);
+
+      if (!parent || parent.isDeleted)
+        throw new NotFoundException('Parent comment not found');
 
       // Prevent replies to replies - enforce 1 level max
       if (parent.parent) {
@@ -57,33 +64,35 @@ export class CommentsService {
       parent: input.parentId ? new Types.ObjectId(input.parentId) : null,
     });
 
-    await comment.populate('author');
+    await comment.populate(publicUser('author'));
     const result = this.toModel(comment);
 
-    // Notify post author or parent comment author
-    if (input.parentId) {
+    // Notify post author or parent comment author. Awaited (serverless can
+    // freeze unawaited work) but never allowed to fail the saved comment.
+    const ignore = () => undefined;
+    if (parent) {
       // This is a reply - notify parent comment author
-      const parent = await this.commentModel.findById(input.parentId);
-      if (parent) {
-        void this.notificationsService.notifyCommentReply({
+      await this.notificationsService
+        .notifyCommentReply({
           recipient: parent.author.toString(),
           actor: author,
           postId: input.postId,
           commentId: comment._id.toString(),
-          postTitle: '',
-        });
-      }
+          postTitle: post.title,
+        })
+        .catch(ignore);
     } else {
       // Top-level comment notify post author
-      const post = await this.postsService.findById(input.postId);
-      if (post?.author) {
-        void this.notificationsService.notifyPostComment({
-          recipient: post.author._id,
-          actor: author,
-          postId: input.postId,
-          commentId: comment._id.toString(),
-          postTitle: post.title,
-        });
+      if (post.author) {
+        await this.notificationsService
+          .notifyPostComment({
+            recipient: post.author._id,
+            actor: author,
+            postId: input.postId,
+            commentId: comment._id.toString(),
+            postTitle: post.title,
+          })
+          .catch(ignore);
       }
     }
     return result;
@@ -93,7 +102,7 @@ export class CommentsService {
     // Fetch all comments for a post in one query
     const comments = await this.commentModel
       .find({ post: new Types.ObjectId(postId) })
-      .populate('author')
+      .populate(publicUser('author'))
       .sort({ createdAt: 1 })
       .lean()
       .exec();
@@ -126,7 +135,7 @@ export class CommentsService {
 
     comment.body = input.body;
     await comment.save();
-    await comment.populate('author');
+    await comment.populate(publicUser('author'));
     return this.toModel(comment);
   }
 

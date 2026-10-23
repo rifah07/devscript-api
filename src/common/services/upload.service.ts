@@ -1,8 +1,17 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';
+import { detectImageType } from '../utils/image-signature.util';
 
 /// <reference types="multer" />
+
+// Multer stops reading a file past this size (413), so a huge upload is
+// never buffered into memory just to be rejected afterwards.
+export const UPLOAD_LIMITS = {
+  fileSize: 4 * 1024 * 1024,
+  files: 10,
+  fields: 10,
+};
 
 export interface UploadResult {
   url: string;
@@ -34,13 +43,15 @@ export class UploadService {
     };
   }
 
-  async uploadPostCover(file: Express.Multer.File): Promise<UploadResult> {
+  async uploadGalleryImage(file: Express.Multer.File): Promise<UploadResult> {
     this.validateImageFile(file);
 
     const result = await this.uploadStream(file.buffer, {
       folder: 'devscript/covers',
+      // Keep the original shape (a portrait stays portrait); crops happen
+      // per use at delivery time via URL variants. `limit` only shrinks.
       transformation: [
-        { width: 1200, height: 630, crop: 'fill' },
+        { width: 2400, height: 2400, crop: 'limit' },
         { quality: 'auto', fetch_format: 'auto' },
       ],
       // Eager: pre-generate these specific sizes immediately at upload time
@@ -86,17 +97,17 @@ export class UploadService {
   // ─── Private helpers ──────────────────────────────────────────────────────
 
   private validateImageFile(file: Express.Multer.File): void {
-    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-
-    if (!allowedMimeTypes.includes(file.mimetype)) {
+    // Check the bytes, not the client's claimed MIME type.
+    if (!file?.buffer || !detectImageType(file.buffer)) {
       throw new BadRequestException(
         'Invalid file type. Only JPEG, PNG, and WebP are allowed',
       );
     }
 
-    const maxSizeBytes = 5 * 1024 * 1024;
+    // Vercel functions accept at most 4.5 MB per request body.
+    const maxSizeBytes = 4 * 1024 * 1024;
     if (file.size > maxSizeBytes) {
-      throw new BadRequestException('File too large. Maximum size is 5MB');
+      throw new BadRequestException('File too large. Maximum size is 4MB');
     }
   }
 

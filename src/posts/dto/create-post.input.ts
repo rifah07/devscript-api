@@ -17,13 +17,15 @@ import { IsValidPostTypeForSpace } from '../validators/post-type-space-match.val
 export class CreatePostInput {
   @Field()
   @IsString()
-  @MinLength(5, { message: 'Title must be at least 5 characters' })
+  @MinLength(1, { message: 'Title cannot be empty' })
   @MaxLength(150, { message: 'Title cannot exceed 150 characters' })
   declare title: string;
 
   @Field()
   @IsString()
-  @MinLength(50, { message: 'Body must be at least 50 characters' })
+  // Short poems are welcome; the cap stops 1 MB request bodies.
+  @MinLength(10, { message: 'Body must be at least 10 characters' })
+  @MaxLength(100_000, { message: 'Body cannot exceed 100,000 characters' })
   declare body: string;
 
   @Field(() => [String], { nullable: true })

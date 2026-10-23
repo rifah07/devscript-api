@@ -11,11 +11,11 @@ export class PostCoverImageResolver {
 
   @ResolveField(() => ImageVariants, { nullable: true })
   coverImageVariants(@Parent() post: PostModel): ImageVariants | null {
-    if (!post.coverImageUrl) return null;
+    if (!post.coverImagePublicId) return null;
 
     const cloudName = this.configService.get<string>('cloudinary.cloudName');
     if (!cloudName) throw new Error('CLOUDINARY_CLOUD_NAME is not configured');
 
-    return buildAllVariants(cloudName, post.coverImageUrl);
+    return buildAllVariants(cloudName, post.coverImagePublicId);
   }
 }

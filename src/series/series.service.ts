@@ -7,12 +7,14 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import slugify from 'slugify';
+import { toPostModel } from '../posts/utils/post.mapper';
+import { publicUser } from '../users/public-user-fields';
 
 import { Series, SeriesDocument } from './schemas/series.schema';
 import { SeriesModel } from './models/series.model';
 import { CreateSeriesInput } from './dto/create-series.input';
 import { AddPostToSeriesInput } from './dto/add-post-to-series.input';
-import { Post, PostDocument } from '../posts/schemas/post.schema';
+import { Post, PostDocument, PostStatus } from '../posts/schemas/post.schema';
 import { PostModel } from '../posts/models/post.model';
 import { UserRole } from '../users/schemas/user.schema';
 import type { UserDocument } from '../users/schemas/user.schema';
@@ -41,14 +43,14 @@ export class SeriesService {
       space: input.space,
     });
 
-    await series.populate('author');
+    await series.populate(publicUser('author'));
     return this.toModel(series);
   }
 
   async findAllByAuthor(authorId: string): Promise<SeriesModel[]> {
     const series = await this.seriesModel
       .find({ author: new Types.ObjectId(authorId) })
-      .populate('author')
+      .populate(publicUser('author'))
       .sort({ createdAt: -1 })
       .lean()
       .exec();
@@ -59,23 +61,25 @@ export class SeriesService {
   async findBySlug(slug: string): Promise<SeriesModel> {
     const series = await this.seriesModel
       .findOne({ slug })
-      .populate('author')
+      .populate(publicUser('author'))
       .lean()
       .exec();
 
     if (!series) throw new NotFoundException('Series not found');
 
-    // Fetch posts in this series, ordered
+    // Fetch posts in this series, ordered. Published only: a public series
+    // page must not reveal drafts.
     const posts = await this.postModel
-      .find({ series: series._id })
-      .populate('author')
+      .find({ series: series._id, status: PostStatus.PUBLISHED })
+      .select('-body -uniqueViewers')
+      .populate(publicUser('author'))
       .populate('category')
       .sort({ seriesOrder: 1 })
       .lean()
       .exec();
 
     const model = this.toModel(series);
-    model.posts = posts.map((p) => this.toPostModel(p));
+    model.posts = posts.map((p) => toPostModel(p));
     return model;
   }
 
@@ -89,11 +93,15 @@ export class SeriesService {
     const post = await this.postModel.findById(input.postId);
     if (!post) throw new NotFoundException('Post not found');
 
-    // Only the series owner (or admin) can add posts to it
-    const isOwner = series.author.toString() === requestor._id.toString();
+    // Requestor must own BOTH the series and the post (or be admin),
+    // otherwise anyone could pull someone else's post into their series.
     const isAdmin = requestor.role === UserRole.ADMIN;
-    if (!isOwner && !isAdmin) {
-      throw new ForbiddenException('You do not own this series');
+    const ownsSeries = series.author.toString() === requestor._id.toString();
+    const ownsPost = post.author.toString() === requestor._id.toString();
+    if (!isAdmin && !(ownsSeries && ownsPost)) {
+      throw new ForbiddenException(
+        'You can only add your own posts to your own series',
+      );
     }
 
     // Post must belong to the same space as the series
@@ -103,30 +111,33 @@ export class SeriesService {
       );
     }
 
-    // If already in a different series, remove from that one first
-    if (post.series && post.series.toString() !== input.seriesId) {
+    // Decide BEFORE reassigning post.series. The old code checked after the
+    // assignment, when the answer was always "already in it": postCount
+    // never went up.
+    const wasInThisSeries = post.series?.toString() === input.seriesId;
+    const previousSeries = post.series && !wasInThisSeries ? post.series : null;
+
+    post.series = series._id;
+    post.seriesOrder =
+      input.order ??
+      (wasInThisSeries ? post.seriesOrder : series.postCount + 1);
+    await post.save();
+
+    if (previousSeries) {
       await this.seriesModel.updateOne(
-        { _id: post.series },
+        { _id: previousSeries },
         { $inc: { postCount: -1 } },
       );
     }
-
-    const order = input.order ?? series.postCount + 1;
-
-    post.series = series._id;
-    post.seriesOrder = order;
-    await post.save();
-
-    // Only increment if this post wasn't already counted in this series
-    if (!post.series || post.series.toString() !== input.seriesId) {
+    if (!wasInThisSeries) {
       await this.seriesModel.updateOne(
         { _id: series._id },
         { $inc: { postCount: 1 } },
       );
     }
 
-    await post.populate(['author', 'category']);
-    return this.toPostModel(post);
+    await post.populate([publicUser('author'), 'category']);
+    return toPostModel(post);
   }
 
   async removePost(
@@ -157,9 +168,9 @@ export class SeriesService {
     post.series = null;
     post.seriesOrder = null;
     await post.save();
-    await post.populate(['author', 'category']);
+    await post.populate([publicUser('author'), 'category']);
 
-    return this.toPostModel(post);
+    return toPostModel(post);
   }
 
   async remove(seriesId: string, requestor: UserDocument): Promise<boolean> {
@@ -199,37 +210,6 @@ export class SeriesService {
       space: doc.space,
       postCount: doc.postCount,
       createdAt: doc.createdAt,
-    };
-  }
-
-  private toPostModel(doc: PostDocument): PostModel {
-    const author = doc.author;
-    const category = doc.category;
-    return {
-      _id: doc._id.toString(),
-      title: doc.title,
-      slug: doc.slug,
-      body: doc.body,
-      summary: doc.summary,
-      tags: doc.tags,
-      space: doc.space,
-      postType: doc.postType,
-      coverImageUrl: doc.coverImageUrl,
-      gallery: doc.gallery,
-      author:
-        author && typeof author === 'object' && '_id' in author
-          ? (author as unknown as PostModel['author'])
-          : undefined,
-      category:
-        category && typeof category === 'object' && '_id' in category
-          ? (category as unknown as PostModel['category'])
-          : undefined,
-      status: doc.status,
-      readTime: doc.readTime,
-      viewCount: doc.viewCount,
-      bookmarksCount: doc.bookmarksCount,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
     };
   }
 }

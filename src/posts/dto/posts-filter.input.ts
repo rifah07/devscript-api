@@ -24,6 +24,11 @@ export class PostsFilterInput {
   @IsMongoId()
   declare authorId?: string;
 
+  @Field(() => ID, { nullable: true })
+  @IsOptional()
+  @IsMongoId()
+  declare categoryId?: string;
+
   @Field(() => PostSpace, { nullable: true })
   @IsOptional()
   @IsEnum(PostSpace)

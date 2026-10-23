@@ -83,8 +83,9 @@ export class AdminResolver {
   @Mutation(() => Boolean)
   async adminDeletePost(
     @Args('postId', { type: () => ID }) postId: string,
+    @CurrentUser() admin: UserDocument,
   ): Promise<boolean> {
-    return this.adminService.deletePost(postId);
+    return this.adminService.deletePost(postId, admin);
   }
 
   @Mutation(() => Boolean)

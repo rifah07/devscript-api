@@ -20,6 +20,7 @@ import {
 
 import { FollowsService } from './follows.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 
@@ -88,12 +89,12 @@ export class FollowsController {
   @Get(':userId/stats')
   @ApiOperation({ summary: 'Get follow stats for a user' })
   @ApiParam({ name: 'userId', description: 'User ID' })
-  @ApiQuery({ name: 'currentUserId', required: false })
   @ApiResponse({ status: 200, description: 'Follow stats returned' })
+  @UseGuards(OptionalJwtAuthGuard)
   async getStats(
     @Param('userId') userId: string,
-    @Query('currentUserId') currentUserId?: string,
+    @CurrentUser() user: UserDocument | null,
   ) {
-    return this.followsService.getStats(userId, currentUserId);
+    return this.followsService.getStats(userId, user?._id.toString());
   }
 }

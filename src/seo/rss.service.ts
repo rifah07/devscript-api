@@ -2,6 +2,7 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
+import { publicUser } from '../users/public-user-fields';
 
 import {
   Post,
@@ -27,7 +28,7 @@ export class RssService {
 
     const posts = await this.postModel
       .find({ space, status: PostStatus.PUBLISHED })
-      .populate('author')
+      .populate(publicUser('author'))
       .sort({ createdAt: -1 })
       .limit(FEED_ITEM_LIMIT)
       .lean()

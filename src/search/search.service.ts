@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { PostSpace } from '../posts/schemas/post.schema';
+import { toPostModel } from '../posts/utils/post.mapper';
+import { publicUser } from '../users/public-user-fields';
 
 import { Post, PostDocument, PostStatus } from '../posts/schemas/post.schema';
 import { PostModel } from '../posts/models/post.model';
@@ -19,16 +22,18 @@ export class SearchService {
 
     // Build the query
     const query: Record<string, unknown> = {
-      // Only search published posts
+      // Only search published posts, in the caller's site
       status: PostStatus.PUBLISHED,
+      space: input.space,
       // MongoDB $text search — uses the text index we created in Phase 2
       $text: { $search: input.query },
     };
 
     if (input.tag) query['tags'] = input.tag;
     if (input.authorId) query['author'] = new Types.ObjectId(input.authorId);
+    // shortcut: an _id cursor doesn't match the relevance sort, so later pages
+    // can skip or repeat results; switch to offset or a score-based cursor.
     if (input.cursor) query['_id'] = { $lt: new Types.ObjectId(input.cursor) };
-    if (input.space) query['space'] = input.space;
 
     const [posts, totalCount] = await Promise.all([
       this.postModel
@@ -42,8 +47,9 @@ export class SearchService {
           score: { $meta: 'textScore' },
           createdAt: -1,
         })
+        .select('-body -uniqueViewers')
         .limit(limit + 1)
-        .populate('author')
+        .populate([publicUser('author'), 'category'])
         .lean()
         .exec(),
       this.postModel.countDocuments(query),
@@ -53,7 +59,7 @@ export class SearchService {
     const sliced = hasNextPage ? posts.slice(0, limit) : posts;
 
     return {
-      posts: sliced.map((p) => this.toPostModel(p)),
+      posts: sliced.map((p) => toPostModel(p)),
       totalCount,
       nextCursor: hasNextPage
         ? sliced[sliced.length - 1]?._id.toString()
@@ -62,58 +68,37 @@ export class SearchService {
     };
   }
 
-  async getTopPosts(limit = 10): Promise<PostModel[]> {
+  async getTopPosts(space: PostSpace, limit = 10): Promise<PostModel[]> {
     const posts = await this.postModel
-      .find({ status: PostStatus.PUBLISHED })
+      .find({ status: PostStatus.PUBLISHED, space })
+      .select('-body -uniqueViewers')
       .sort({ viewCount: -1, createdAt: -1 })
-      .limit(limit)
-      .populate('author')
+      .limit(clamp(limit))
+      .populate([publicUser('author'), 'category'])
       .lean()
       .exec();
 
-    return posts.map((p) => this.toPostModel(p));
+    return posts.map((p) => toPostModel(p));
   }
 
-  async getTrendingTags(limit = 20): Promise<{ tag: string; count: number }[]> {
+  async getTrendingTags(
+    space: PostSpace,
+    limit = 20,
+  ): Promise<{ tag: string; count: number }[]> {
     // Aggregate all tags across published posts and count occurrences
     const result = await this.postModel.aggregate<{
       _id: string;
       count: number;
     }>([
-      { $match: { status: PostStatus.PUBLISHED } },
+      { $match: { status: PostStatus.PUBLISHED, space } },
       { $unwind: '$tags' },
       { $group: { _id: '$tags', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: limit },
+      { $limit: clamp(limit) },
     ]);
 
     return result.map((r) => ({ tag: r._id, count: r.count }));
   }
-
-  // ─── Private helpers ──────────────────────────────────────────────────────
-
-  private toPostModel(doc: PostDocument): PostModel {
-    const author = doc.author;
-    return {
-      _id: doc._id.toString(),
-      title: doc.title,
-      slug: doc.slug,
-      body: doc.body,
-      summary: doc.summary,
-      tags: doc.tags,
-      author:
-        author && typeof author === 'object' && '_id' in author
-          ? (author as unknown as PostModel['author'])
-          : undefined,
-      status: doc.status,
-      readTime: doc.readTime,
-      viewCount: doc.viewCount,
-      bookmarksCount: doc.bookmarksCount,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-      space: doc.space,
-      postType: doc.postType,
-      gallery: doc.gallery,
-    };
-  }
 }
+
+const clamp = (limit: number) => Math.min(Math.max(limit, 1), 50);

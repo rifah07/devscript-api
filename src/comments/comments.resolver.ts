@@ -1,5 +1,7 @@
 import { Resolver, Mutation, Query, Args, ID } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 import { CommentsService } from './comments.service';
 import { CommentModel } from './models/comment.model';
@@ -14,7 +16,8 @@ export class CommentsResolver {
   constructor(private readonly commentsService: CommentsService) {}
 
   @Mutation(() => CommentModel)
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // same as REST
   async createComment(
     @Args('input') input: CreateCommentInput,
     @CurrentUser() user: UserDocument,
