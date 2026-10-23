@@ -2,9 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import * as request from 'supertest';
+import request from 'supertest';
 
 import { AppModule } from '../src/app.module';
+
+const INTERNAL_KEY = 'e2e-internal-key-0123456789abcdef0123';
 
 describe('Auth (e2e)', () => {
   let app: INestApplication;
@@ -22,6 +24,7 @@ describe('Auth (e2e)', () => {
     process.env.REFRESH_TOKEN_SECRET = 'e2e-test-refresh-secret';
     process.env.JWT_EXPIRES_IN = '15m';
     process.env.REFRESH_TOKEN_EXPIRES_IN = '30d';
+    process.env.INTERNAL_API_KEY = INTERNAL_KEY;
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -91,6 +94,9 @@ describe('Auth (e2e)', () => {
           name: 'Short Pass User',
           password: '123', // below 8-char minimum
         })
+        // Earlier tests used up the 3/min register limit; guards run before
+        // validation, so without this the answer would be 429, not 400.
+        .set('x-internal-key', INTERNAL_KEY)
         .expect(400);
     });
   });
