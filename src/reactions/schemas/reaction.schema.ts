@@ -25,10 +25,10 @@ export class Reaction {
   @Prop({ type: Types.ObjectId, required: true })
   declare targetId: Types.ObjectId;
 
-  @Prop({ enum: ReactionTargetType, required: true })
+  @Prop({ type: String, enum: ReactionTargetType, required: true })
   declare targetType: ReactionTargetType;
 
-  @Prop({ enum: ReactionType, required: true })
+  @Prop({ type: String, enum: ReactionType, required: true })
   declare type: ReactionType;
 
   @Prop()

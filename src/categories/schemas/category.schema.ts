@@ -20,7 +20,7 @@ export class Category {
   @Prop({ default: 0 })
   declare postCount: number;
 
-  @Prop({ enum: PostSpace, required: true, index: true })
+  @Prop({ type: String, enum: PostSpace, required: true, index: true })
   declare space: PostSpace;
 
   @Prop()
