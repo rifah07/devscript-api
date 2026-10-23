@@ -185,6 +185,7 @@ type Mutation {
   removePostFromSeries(postId: ID!): PostModel!
   reorderGallery(postId: ID!, publicIds: [String!]!): PostModel!
   reportContent(input: CreateReportInput!): ReportModel!
+  resendVerificationEmail(space: PostSpace!): Boolean!
   resetPassword(input: ResetPasswordInput!): Boolean!
   reviewReport(input: ReviewReportInput!): ReportModel!
   schedulePost(postId: ID!, scheduledAt: String!): PostModel!
@@ -200,6 +201,7 @@ type Mutation {
   updateGalleryImageAlt(alt: String!, postId: ID!, publicId: String!): PostModel!
   updatePost(input: UpdatePostInput!): PostModel!
   updateProfile(input: UpdateProfileInput!): UserModel!
+  verifyEmail(token: String!): Boolean!
 }
 
 type NotificationModel {
@@ -405,6 +407,7 @@ input RegisterInput {
   email: String!
   name: String!
   password: String!
+  space: PostSpace
 }
 
 type ReportModel {
@@ -542,6 +545,7 @@ type UserModel {
   bio: String
   createdAt: DateTime
   email: String!
+  emailVerified: Boolean!
   github: String
   leetcode: String
   name: String!
