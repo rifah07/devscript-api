@@ -35,7 +35,6 @@ export interface UserDataExport {
     name: string;
     email: string;
     bio: string;
-    penName: string;
     createdAt: Date;
   };
   posts: Array<{
@@ -124,7 +123,6 @@ export class AccountService {
         name: user.name,
         email: user.email,
         bio: user.bio,
-        penName: user.penName,
         createdAt: user.createdAt,
       },
       posts: posts.map((p) => ({
@@ -167,7 +165,11 @@ export class AccountService {
 
     if (!fullUser) throw new NotFoundException('User not found');
 
-    const isPasswordValid = await bcrypt.compare(password, fullUser.password);
+    // Google-only accounts have no password; they set one via "forgot
+    // password" first, so deletion always needs a real secret.
+    const isPasswordValid =
+      !!fullUser.password &&
+      (await bcrypt.compare(password, fullUser.password));
     if (!isPasswordValid) {
       throw new UnauthorizedException(
         'Incorrect password — account not deleted',

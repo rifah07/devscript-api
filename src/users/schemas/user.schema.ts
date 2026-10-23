@@ -10,6 +10,12 @@ export enum UserRole {
   ADMIN = 'admin',
 }
 
+// Extension point for paid tiers: limits per plan live in ai/ai-plans.ts.
+export enum UserPlan {
+  FREE = 'free',
+  PREMIUM = 'premium',
+}
+
 export enum AuthProvider {
   LOCAL = 'local',
   GOOGLE = 'google',
@@ -29,7 +35,7 @@ export class User {
   @Prop({ required: true, minlength: 2, maxlength: 50 })
   declare name: string;
 
-  @Prop({ enum: AuthProvider, default: AuthProvider.LOCAL })
+  @Prop({ type: String, enum: AuthProvider, default: AuthProvider.LOCAL })
   declare authProvider: AuthProvider;
 
   @Prop({
@@ -43,7 +49,7 @@ export class User {
   @Prop({ type: String, default: null, index: true, sparse: true })
   declare googleId: string | null;
 
-  @Prop({ enum: UserRole, default: UserRole.USER })
+  @Prop({ type: String, enum: UserRole, default: UserRole.USER })
   declare role: UserRole;
 
   @Prop({ default: '' })
@@ -70,8 +76,22 @@ export class User {
   @Prop({ default: true })
   declare isActive: boolean;
 
-  @Prop({ default: '' })
-  declare penName: string;
+  // True once the owner proved they control the inbox: clicked the emailed
+  // link, reset their password by email, or signed in with Google.
+  @Prop({ default: false })
+  declare emailVerified: boolean;
+
+  @Prop({ type: String, enum: UserPlan, default: UserPlan.FREE })
+  declare plan: UserPlan;
+
+  // Today's AI usage: { day: 'YYYY-MM-DD', count }. Reset implicitly when
+  // the day changes (see AiQuotaService). select:false keeps it internal.
+  @Prop({
+    type: { day: String, count: Number },
+    default: { day: '', count: 0 },
+    select: false,
+  })
+  declare aiUsage: { day: string; count: number };
 
   @Prop()
   declare createdAt: Date;

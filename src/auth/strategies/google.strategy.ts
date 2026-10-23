@@ -6,6 +6,7 @@ import { ConfigService } from '@nestjs/config';
 export interface GoogleProfile {
   googleId: string;
   email: string;
+  emailVerified: boolean;
   name: string;
   avatarUrl: string;
 }
@@ -47,6 +48,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const googleProfile: GoogleProfile = {
       googleId: profile.id,
       email,
+      // Google's own "this person controls this inbox" flag. Accounts are
+      // matched by email, so an unverified one must never be trusted.
+      emailVerified: profile.emails?.[0]?.verified === true,
       name: profile.displayName,
       avatarUrl: profile.photos?.[0]?.value ?? '',
     };

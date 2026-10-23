@@ -7,6 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { siteFor } from '../common/utils/site.util';
 
 import {
   NewsletterSubscriber,
@@ -15,9 +16,6 @@ import {
 import { SubscribeInput } from './dto/subscribe.input';
 import { PostSpace } from '../posts/schemas/post.schema';
 import { EmailService } from '../email/email.service';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
-import { EMAIL_QUEUE } from '../queue/queue.module';
 
 @Injectable()
 export class NewsletterService {
@@ -26,7 +24,6 @@ export class NewsletterService {
     private readonly subscriberModel: Model<NewsletterSubscriberDocument>,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
-    @InjectQueue(EMAIL_QUEUE) private readonly emailQueue: Queue,
   ) {}
 
   async subscribe(input: SubscribeInput): Promise<boolean> {
@@ -69,7 +66,7 @@ export class NewsletterService {
     subscriber.confirmedAt = new Date();
     await subscriber.save();
 
-    const siteName = this.getSiteName(subscriber.space);
+    const siteName = siteFor(this.configService, subscriber.space).name;
     await this.emailService.sendWelcomeEmail(subscriber.email, siteName);
 
     return true;
@@ -83,6 +80,8 @@ export class NewsletterService {
     return true;
   }
 
+  // Called by PostsService when a post is published — sends to every
+  // confirmed subscriber of that space
   async notifySubscribersOfNewPost(
     space: PostSpace,
     postTitle: string,
@@ -96,30 +95,30 @@ export class NewsletterService {
 
     if (subscribers.length === 0) return;
 
-    const baseUrl = this.getBaseUrl(space);
-    const siteName = this.getSiteName(space);
+    const baseUrl = siteFor(this.configService, space).url;
+    const siteName = siteFor(this.configService, space).name;
     const postUrl = `${baseUrl}/posts/${postSlug}`;
 
-    // Instead of sending inline, add ONE job per subscriber to the queue.
-    // This returns almost instantly - actual sending happens in the
-    // background worker, with automatic retries if Resend has a hiccup.
-    const jobs = subscribers.map((subscriber) => ({
-      name: 'send-new-post-email',
-      data: {
-        to: subscriber.email,
-        siteName,
-        postTitle,
-        postSummary,
-        postUrl,
-        unsubscribeUrl: `${baseUrl}/unsubscribe?token=${subscriber.token}`,
-      },
-      opts: {
-        attempts: 3, // retry up to 3 times on failure
-        backoff: { type: 'exponential', delay: 5000 }, // 5s, 10s, 20s between retries
-      },
-    }));
+    // Send in small batches to avoid hammering the email API with
+    // hundreds of simultaneous requests if the subscriber list grows large
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < subscribers.length; i += BATCH_SIZE) {
+      const batch = subscribers.slice(i, i + BATCH_SIZE);
 
-    await this.emailQueue.addBulk(jobs);
+      await Promise.all(
+        batch.map((subscriber) => {
+          const unsubscribeUrl = `${baseUrl}/unsubscribe?token=${subscriber.token}`;
+          return this.emailService.sendNewPostEmail(
+            subscriber.email,
+            siteName,
+            postTitle,
+            postSummary,
+            postUrl,
+            unsubscribeUrl,
+          );
+        }),
+      );
+    }
   }
 
   async getSubscriberCount(space: PostSpace): Promise<number> {
@@ -131,8 +130,8 @@ export class NewsletterService {
   private async sendConfirmationEmail(
     subscriber: NewsletterSubscriberDocument,
   ): Promise<void> {
-    const baseUrl = this.getBaseUrl(subscriber.space);
-    const siteName = this.getSiteName(subscriber.space);
+    const baseUrl = siteFor(this.configService, subscriber.space).url;
+    const siteName = siteFor(this.configService, subscriber.space).name;
     const confirmUrl = `${baseUrl}/confirm-subscription?token=${subscriber.token}`;
 
     await this.emailService.sendConfirmationEmail(
@@ -140,17 +139,5 @@ export class NewsletterService {
       confirmUrl,
       siteName,
     );
-  }
-
-  private getBaseUrl(space: PostSpace): string {
-    return space === PostSpace.DEVSCRIPT
-      ? (this.configService.get<string>('seo.devscriptUrl') ?? '')
-      : (this.configService.get<string>('seo.miskJournalUrl') ?? '');
-  }
-
-  private getSiteName(space: PostSpace): string {
-    const names =
-      this.configService.get<Record<string, string>>('seo.siteName');
-    return names?.[space] ?? 'Blog';
   }
 }

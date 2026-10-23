@@ -1,6 +1,6 @@
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 import { PostSpace } from '../../posts/schemas/post.schema';
-import { UserModel } from '../../users/models/user.model';
+import { PublicUserModel } from '../../users/models/public-user.model';
 import { PostModel } from '../../posts/models/post.model';
 
 @ObjectType()
@@ -20,8 +20,8 @@ export class SeriesModel {
   @Field({ nullable: true })
   declare coverImageUrl?: string;
 
-  @Field(() => UserModel, { nullable: true })
-  declare author?: UserModel;
+  @Field(() => PublicUserModel, { nullable: true })
+  declare author?: PublicUserModel;
 
   @Field(() => PostSpace)
   declare space: PostSpace;

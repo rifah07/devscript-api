@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { publicUser } from '../users/public-user-fields';
 
 import { Follow, FollowDocument } from './schemas/follow.schema';
 import { FollowStats, PaginatedUsers } from './models/follow.model';
@@ -93,7 +94,7 @@ export class FollowsService {
       .find(query)
       .sort({ _id: -1 })
       .limit(PAGE_SIZE + 1)
-      .populate('follower') // populate the follower user document
+      .populate(publicUser('follower')) // populate the follower user document
       .lean()
       .exec();
 
@@ -128,7 +129,7 @@ export class FollowsService {
       .find(query)
       .sort({ _id: -1 })
       .limit(PAGE_SIZE + 1)
-      .populate('following') // populate the following user document
+      .populate(publicUser('following')) // populate the following user document
       .lean()
       .exec();
 

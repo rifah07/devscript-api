@@ -17,6 +17,11 @@ import {
 } from './schemas/refresh-token.schema';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
+import {
+  OneTimeToken,
+  OneTimeTokenSchema,
+} from './schemas/one-time-token.schema';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -24,7 +29,9 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
     PassportModule,
     MongooseModule.forFeature([
       { name: RefreshToken.name, schema: RefreshTokenSchema },
+      { name: OneTimeToken.name, schema: OneTimeTokenSchema },
     ]),
+    EmailModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService): JwtModuleOptions => {
