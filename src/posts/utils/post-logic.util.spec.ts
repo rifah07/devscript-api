@@ -35,6 +35,8 @@ describe('post logic', () => {
         '- single-use **token** [docs](https://x.dev)\n\n| A | B |\n|---|---|\n| 1 | 2 |',
       ),
     ).toBe('single-use token docs');
-    expect(makeExcerpt('Hi <script>alert(1)</script> there')).toBe('Hi alert(1) there');
+    expect(makeExcerpt('Hi <script>alert(1)</script> there')).toBe(
+      'Hi alert(1) there',
+    );
   });
 });

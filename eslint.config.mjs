@@ -47,6 +47,12 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/unbound-method': 'off',
       'jest/unbound-method': 'error', // catches REAL unbound-method bugs, ignores mocks correctly
+      // supertest types every response body as any; in tests the expect()
+      // on the next line is the type check, so these only add noise
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
     },
   },
 );

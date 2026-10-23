@@ -85,7 +85,7 @@ describe('Security regressions (e2e)', () => {
     process.env.MONGODB_URI = mongod.getUri();
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(AiService)
-      .useValue({ embed: async () => null, spend: () => true })
+      .useValue({ embed: () => Promise.resolve(null), spend: () => true })
       .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     app.set('trust proxy', 1);
@@ -102,10 +102,10 @@ describe('Security regressions (e2e)', () => {
     jest
       .spyOn(app.get(EmailService), 'send')
       .mockImplementation(
-        async (p: { to: string; html: string; subject: string }) => (
-          sentEmails.push(p),
-          true
-        ),
+        (p: { to: string; html: string; subject: string }) => {
+          sentEmails.push(p);
+          return Promise.resolve(true);
+        },
       );
     auth = app.get(AuthService);
     users = app.get(getModelToken('User'));
