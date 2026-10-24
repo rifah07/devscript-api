@@ -2,9 +2,9 @@
 
 One NestJS backend for two writing sites: **DevScript** (technical articles, open to any developer) and **The Misk Journal** (poems and reflections, in Bangla and English). Each post belongs to a `space`, and every query is scoped to one, so the two sites never mix.
 
-**Stack:** NestJS 11 · TypeScript · GraphQL (Apollo, code-first) + REST · MongoDB/Mongoose · JWT with rotating refresh tokens · Google Gemini (`@google/genai`) · Cloudinary · Brevo email
+**Stack:** NestJS 11 · TypeScript · GraphQL (Apollo, code-first) + REST · MongoDB/Mongoose · JWT with rotating refresh tokens · Google Gemini (`@google/genai`) · Cloudinary · Resend email
 
-Frontend: [`devscript-web`](https://github.com/rifah07/devscript-web) · Free deploy guide: [`docs/DEPLOY.md`](docs/DEPLOY.md)
+**Frontend:** [devscript-web](https://github.com/rifah07/devscript-web) (both sites from one Next.js codebase) · **Deploy guide:** [docs/DEPLOY.md](docs/DEPLOY.md) (free, no card)
 
 ---
 
@@ -13,7 +13,7 @@ Frontend: [`devscript-web`](https://github.com/rifah07/devscript-web) · Free de
 - **Two products, one backend, zero leakage.** Every query is scoped to a `space`; a pen-name site and a real-name site share code but never data or links.
 - **Security audited and pinned by tests.** Account takeover via Google linking, login CSRF, email HTML injection and more were found, fixed and locked in by `test/security.e2e-spec.ts`.
 - **AI that stays cheap and honest.** Free Gemini models behind per-user quotas, a site-wide budget and an output guardrail; semantic related posts use embeddings plus a top-k heap instead of a vector database.
-- **Free to run.** Deploys on Vercel + MongoDB Atlas M0 + Cloudinary + Brevo with no credit card.
+- **Free to run.** Deploys on Vercel + MongoDB Atlas M0 + Cloudinary + Resend with no credit card.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ flowchart LR
   Mo --> DB[(MongoDB Atlas)]
   S --> AI[Gemini]
   S --> CL[Cloudinary]
-  S --> E[Brevo email]
+  S --> E[Resend email]
 ```
 
 ## What it does
@@ -67,15 +67,17 @@ flowchart LR
 ```bash
 npm install
 cp .env.example .env     # fill MONGODB_URI, secrets, Cloudinary, GEMINI_API_KEY
-npm run start:dev        # http://localhost:3000/graphql  ·  Swagger at /api/docs
+npm run start:dev        # http://localhost:3000/graphql · Swagger at /api/docs
 ```
 
-Without `BREVO_API_KEY`, emails (password resets, newsletter confirmations) are printed in the terminal, so you can click the links locally.
+Swagger, the GraphQL playground and introspection exist only outside production: in production they would document every route for attackers too.
+
+Without `RESEND_API_KEY`, emails (password resets, newsletter confirmations) are printed in the terminal, so you can click the links locally.
 
 | Command | What it does |
 |---|---|
 | `npm run start:dev` | Dev server with reload |
-| `npm test` | Unit tests (visibility matrix, top-k heap, LRU cache, depth limit, magic bytes, humanize, ...) |
+| `npm test` | Unit tests |
 | `npm run test:e2e` | End-to-end tests against an in-memory MongoDB |
 | `npm run lint` · `npm run build` | Lint, compile |
 | `npm run db:sync-indexes` | Make database indexes match the schemas (run once after index changes) |
@@ -100,12 +102,28 @@ Security regressions live in `test/security.e2e-spec.ts`; the audit write-up is 
 
 Each module follows the same shape: `schema` (database) → `service` (rules) → `resolver`/`controller` (thin API) → `dto` (validated input) / `model` (output).
 
+## Tests
+
+| Kind | What it covers |
+|---|---|
+| Unit (`npm test`) | Post visibility rules, top-k heap, LRU cache, GraphQL depth limit, upload magic bytes, the `humanize` guardrail, text-to-speech WAV encoding, auth service and resolver |
+| End to end (`npm run test:e2e`) | Real HTTP and GraphQL against an in-memory MongoDB: sign-up, login and protected routes (`auth`); creating, publishing and reading posts, and space rules such as no poems on DevScript (`posts`) |
+| Security (`test/security.e2e-spec.ts`) | One test per audit finding, so a regression fails loudly |
+
 ## Paid plans later
 
 Users have a `plan` (`FREE` or `PREMIUM`). What each plan gets is defined in one place, `src/ai/ai-plans.ts`. Selling a premium tier means adding a payment flow that sets `user.plan`; nothing else changes.
 
 ## Docs
 
-- `docs/DEPLOY.md`: free, no-card deployment (Vercel + Atlas + Cloudinary + Brevo + cron-job.org)
+- `docs/DEPLOY.md`: free, no-card deployment (Vercel + Atlas + Cloudinary + Resend + cron-job.org)
 - `docs/DECISIONS.md`: trade-offs and where the code differs from the original spec
 - `docs/PROJECT_OVERVIEW.md`, `docs/FRONTEND_SPEC.md`: the original design documents
+
+## Status
+
+Feature-complete and audited. Next: deployment, and a verified email domain so readers receive newsletter confirmations and reset emails (until then Resend delivers only to the account owner, and emails are logged locally).
+
+## Author
+
+**Rifah Sajida Deya** · [GitHub](https://github.com/rifah07)

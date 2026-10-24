@@ -19,7 +19,7 @@
 | ⬜ | Not built |
 
 **Confirmed state (2026-10-23):** Phase H **H1–H19 are built and verified** (unit tests, e2e tests, and an end-to-end smoke run against an in-memory MongoDB). Also fixed on the way: B1–B7, B16–B22, the REST `@CurrentUser` crash, enum `@Prop` types, the never-registered exception filter, series ownership and draft leaks, bookmark count drift, Google `state` being dropped.
-Round 2 (same day): H21 cascade delete, H22 Bangla-friendly text index, H24 magic-byte upload checks and H25 reaction notifications are done; AI moved to `@google/genai` with per-user quotas, semantic related posts and "ask this article"; email moved to Brevo; both frontends built (`devscript-web`). Deployment is fully free: see `DEPLOY.md`.
+Round 2 (same day): H21 cascade delete, H22 Bangla-friendly text index, H24 magic-byte upload checks and H25 reaction notifications are done; AI moved to `@google/genai` with per-user quotas, semantic related posts and "ask this article"; email on Resend (Brevo tried, then dropped); both frontends built (`devscript-web`). Deployment is fully free: see `DEPLOY.md`.
 Still open: H20 email verification, H23 opt-in `totalCount`, search cursor vs relevance sort (see `DECISIONS.md`).
 The BullMQ queue module exists but is not wired (V1 sends email directly).
 

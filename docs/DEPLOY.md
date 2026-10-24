@@ -10,7 +10,7 @@ Everything below runs on free plans that do **not** ask for a card. You end up w
 | Database | MongoDB Atlas M0 | 512 MB | No |
 | Images and audio | Cloudinary Free | ~25 credits/month | No |
 | AI | Google AI Studio (Gemini API) | Free tier, Flash/Flash-Lite models | No |
-| Email | Brevo Free | 300 emails/day, single verified sender | No |
+| Email | Resend Free | Sends to your own address until you verify a domain | No |
 | Scheduled posts | cron-job.org | Unlimited jobs | No |
 
 > **Why not Render?** Render may ask for a card to verify free accounts. Everything here works without one.
@@ -49,13 +49,12 @@ Sign up at cloudinary.com → Dashboard → copy **Cloud name**, **API key**, **
 
 aistudio.google.com/apikey → **Create API key**. That's `GEMINI_API_KEY`. The free tier is enough for this project; the API also limits itself (25 AI calls per user per day on the free plan, plus a site-wide daily budget).
 
-## Step 4: Brevo for email (10 min)
+## Step 4: Resend for email (5 min)
 
-1. Sign up at brevo.com (free plan).
-2. **Senders, Domains & Dedicated IPs → Senders → Add a sender** with your Gmail address, and click the confirmation link Brevo emails you.
-3. **SMTP & API → API keys → Generate**. That's `BREVO_API_KEY`. Your Gmail address is `EMAIL_FROM`.
+1. Sign up at resend.com (free, no card).
+2. **API Keys → Create API key**. That's `RESEND_API_KEY`. Leave `EMAIL_FROM` empty (it uses `onboarding@resend.dev`).
 
-Without a domain of your own, some inboxes may put these emails in spam at first. That's normal; a custom domain later fixes it.
+**The limit to know:** until you verify a domain you own in Resend (**Domains → Add domain** and its DNS records), Resend delivers only to your own account address. Readers won't get newsletter confirmations or reset emails yet. A `*.vercel.app` address can't be verified (you don't control its DNS); a cheap domain later fixes it: verify it, set `EMAIL_FROM=no-reply@yourdomain`, redeploy.
 
 ## Step 5: Deploy the API on Vercel (10 min)
 
@@ -64,7 +63,7 @@ Without a domain of your own, some inboxes may put these emails in spam at first
 3. **Environment Variables**: add everything from `.env.example`:
    - `NODE_ENV=production`, `JWT_EXPIRES_IN=15m`
    - the four secrets from Step 0
-   - `MONGODB_URI`, the three Cloudinary values, `GEMINI_API_KEY`, `BREVO_API_KEY`, `EMAIL_FROM`
+   - `MONGODB_URI`, the three Cloudinary values, `GEMINI_API_KEY`, `RESEND_API_KEY`
    - `DEVSCRIPT_URL` and `MISK_JOURNAL_URL`: put placeholders for now (e.g. `https://example.com`) and fix them in Step 7
 4. **Deploy**. Open `https://<your-api>.vercel.app/health`; it should say the database is up.
 
@@ -121,6 +120,6 @@ For Misk, register a **separate account** with your pen name (and a different ph
 | API deploy fails at boot with "Invalid environment variables" | A required variable is missing or too short; the message names it |
 | Site shows "Something went wrong" everywhere | `BACKEND_URL` wrong, or `INTERNAL_API_KEY` differs between site and API |
 | Logged out after every reload | Using the API URL directly instead of the site's `/api` proxy |
-| Emails never arrive | Sender not verified in Brevo, or `EMAIL_FROM` isn't exactly the verified address |
+| Emails never arrive | Without a verified domain Resend only delivers to your own account address |
 | AI buttons say "nothing to suggest" | `GEMINI_API_KEY` missing, or today's free quota is used up |
 | Image upload fails for big photos | Shouldn't happen (the browser shrinks them first); check the file is JPEG/PNG/WebP |

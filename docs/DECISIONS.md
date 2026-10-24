@@ -16,7 +16,7 @@ Where the live schema (`src/schema.gql`) differs from `FRONTEND_SPEC.md` Appendi
 | Related posts | Embeddings + brute-force top-k (min-heap) over the latest 500 posts; tag/category scoring as fallback | Simple and fast at blog scale; switch to Atlas Vector Search past ~5k posts |
 | Ask this article | Public, 6/hour per IP, answers cached per post version (LRU) | Useful to anonymous readers without burning the free quota |
 | Side effects on publish | Awaited with `Promise.allSettled` | Serverless can freeze work that runs after the response |
-| Email | Brevo HTTP API (no SDK); no key = log the email | Free sending without owning a domain; local dev needs no email account |
+| Email | Resend HTTP API (no SDK); no key = log the email | Free with no card; to email readers, verify a domain in Resend. Brevo was tried but its free plan pushed toward a paid plan |
 | Search | Text index with `default_language: 'none'`, title weighted 5× | English stemming broke Bangla matching |
 | Search pagination | `_id` cursor with relevance sort can skip/repeat on page 2+ | Marked `shortcut:` in `search.service.ts` |
 | Vercel cron | `GET /posts/cron/publish-scheduled` daily; cron-job.org every 10 min for precision | Hobby cron is daily only |
