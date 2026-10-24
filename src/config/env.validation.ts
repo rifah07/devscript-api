@@ -26,7 +26,7 @@ class EnvironmentVariables {
 
   @IsString() @IsNotEmpty() declare GEMINI_API_KEY: string;
   // Optional: without it, emails are logged instead of sent (handy locally)
-  @IsOptional() @IsString() declare BREVO_API_KEY?: string;
+  @IsOptional() @IsString() declare RESEND_API_KEY?: string;
   @IsOptional() @IsEmail() declare EMAIL_FROM?: string;
 
   @IsUrl({ require_tld: false }) declare DEVSCRIPT_URL: string;

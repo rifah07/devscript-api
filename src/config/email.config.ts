@@ -1,9 +1,9 @@
 import { registerAs } from '@nestjs/config';
 
-// Brevo: free 300 emails/day, sends from a single verified address (e.g. your
-// Gmail) without owning a domain. No key = emails are logged, not sent.
+// Resend: free, no card. Until a domain is verified there, it sends only from
+// onboarding@resend.dev to the account's own address. No key = emails are logged.
 export default registerAs('email', () => ({
-  brevoApiKey: process.env.BREVO_API_KEY,
-  fromAddress: process.env.EMAIL_FROM ?? '',
+  resendApiKey: process.env.RESEND_API_KEY,
+  fromAddress: process.env.EMAIL_FROM || 'onboarding@resend.dev',
   fromName: process.env.EMAIL_FROM_NAME ?? 'DevScript',
 }));

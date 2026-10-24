@@ -12,7 +12,7 @@ interface SendEmailParams {
 // markup into emails sent from this site's address.
 const h = (value: string | number): string => escapeXml(String(value));
 
-const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
+const RESEND_URL = 'https://api.resend.com/emails';
 
 @Injectable()
 export class EmailService {
@@ -21,7 +21,7 @@ export class EmailService {
   private readonly sender: { email: string; name: string };
 
   constructor(configService: ConfigService) {
-    this.apiKey = configService.get<string>('email.brevoApiKey');
+    this.apiKey = configService.get<string>('email.resendApiKey');
     this.sender = {
       email: configService.get<string>('email.fromAddress') ?? '',
       name: configService.get<string>('email.fromName') ?? 'DevScript',
@@ -34,28 +34,27 @@ export class EmailService {
       // Locally the body is printed so you can click reset links. Never in
       // production: those links are credentials and logs are not private.
       this.logger.log(
-        `[email not sent: no BREVO_API_KEY] to=${params.to} subject="${params.subject}"` +
+        `[email not sent: no RESEND_API_KEY] to=${params.to} subject="${params.subject}"` +
           (process.env.NODE_ENV === 'production' ? '' : `\n${params.html}`),
       );
       return false;
     }
     try {
-      const res = await fetch(BREVO_URL, {
+      const res = await fetch(RESEND_URL, {
         method: 'POST',
         headers: {
-          'api-key': this.apiKey,
+          authorization: `Bearer ${this.apiKey}`,
           'content-type': 'application/json',
-          accept: 'application/json',
         },
         body: JSON.stringify({
-          sender: this.sender,
-          to: [{ email: params.to }],
+          from: `${this.sender.name} <${this.sender.email}>`,
+          to: [params.to],
           subject: params.subject,
-          htmlContent: params.html,
+          html: params.html,
         }),
         signal: AbortSignal.timeout(10_000),
       });
-      if (!res.ok) throw new Error(`Brevo ${res.status}: ${await res.text()}`);
+      if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
       return true;
     } catch (error) {
       this.logger.error(`Failed to send email to ${params.to}`, error);
