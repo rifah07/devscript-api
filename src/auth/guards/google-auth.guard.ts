@@ -1,10 +1,23 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  ExecutionContext,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response } from 'express';
 import { newNonce, OAUTH_NONCE_COOKIE } from '../oauth-state';
 
 @Injectable()
 export class GoogleAuthGuard extends AuthGuard('google') {
+  canActivate(context: ExecutionContext) {
+    const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL } =
+      process.env;
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_CALLBACK_URL) {
+      throw new NotFoundException('Google sign-in is not set up');
+    }
+    return super.canActivate(context);
+  }
+
   // Login start (no ?code yet): remember a random nonce in an HttpOnly
   // cookie on the site's domain (the request arrives through the site's
   // /api proxy) and send the same nonce to Google inside `state`.

@@ -171,7 +171,9 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  // Generous: one IP can be a whole campus. Guessing is pointless anyway,
+  // since refresh tokens are random, single-use and rotate on every call.
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token using cookie' })
   async refresh(
     @Req() req: TypedRequest,

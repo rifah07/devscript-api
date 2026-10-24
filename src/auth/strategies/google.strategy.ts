@@ -18,16 +18,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     const clientSecret = configService.get<string>('GOOGLE_CLIENT_SECRET');
     const callbackURL = configService.get<string>('GOOGLE_CALLBACK_URL');
 
-    if (!clientID || !clientSecret || !callbackURL) {
-      throw new Error(
-        'Google OAuth environment variables are not fully configured',
-      );
-    }
-
+    // Google sign-in is optional: without its keys the app still boots and
+    // GoogleAuthGuard answers 404 before this strategy is ever used
     super({
-      clientID,
-      clientSecret,
-      callbackURL,
+      clientID: clientID || 'not-configured',
+      clientSecret: clientSecret || 'not-configured',
+      callbackURL: callbackURL || 'http://localhost/not-configured',
       scope: ['email', 'profile'],
     });
   }
