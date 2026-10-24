@@ -44,15 +44,10 @@ export class SeoController {
   getRobotsTxt(@Query('space') space: PostSpace): string {
     this.validateSpace(space);
 
-    const sitemapUrl =
-      space === PostSpace.DEVSCRIPT
-        ? 'https://devscript.com/sitemap.xml'
-        : 'https://themiskjournal.com/sitemap.xml';
-
     return `User-agent: *
 Allow: /
 
-Sitemap: ${sitemapUrl}`;
+Sitemap: ${this.sitemapService.getBaseUrl(space)}/sitemap.xml`;
   }
 
   private validateSpace(space: unknown): void {

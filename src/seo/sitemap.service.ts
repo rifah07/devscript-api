@@ -80,9 +80,7 @@ export class SitemapService {
     return this.buildXml(urls);
   }
 
-  // ─── Private helpers ──────────────────────────────────────────────────────
-
-  private getBaseUrl(space: PostSpace): string {
+  getBaseUrl(space: PostSpace): string {
     if (space === PostSpace.DEVSCRIPT) {
       return this.configService.get<string>('seo.devscriptUrl') ?? '';
     }
@@ -91,6 +89,8 @@ export class SitemapService {
     }
     throw new BadRequestException(`Unknown space: ${space as string}`);
   }
+
+  // ─── Private helpers ──────────────────────────────────────────────────────
 
   private buildXml(urls: SitemapUrl[]): string {
     const urlEntries = urls
