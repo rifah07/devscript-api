@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { PostsModule } from '../posts/posts.module';
 
 import { Report, ReportSchema } from './schemas/report.schema';
 import { User, UserSchema } from '../users/schemas/user.schema';
@@ -15,6 +16,7 @@ import { AdminController } from './admin.controller';
 
 @Module({
   imports: [
+    PostsModule,
     MongooseModule.forFeature([
       { name: Report.name, schema: ReportSchema },
       { name: User.name, schema: UserSchema },

@@ -1,3 +1,7 @@
+// Not imported by AppModule yet. BullMQ needs Redis plus a long-running
+// worker process, which serverless hosts (Vercel) don't provide; V1 sends
+// email directly. To enable on Render/VPS: write the @Processor classes,
+// add QueueModule to AppModule imports, set REDIS_HOST/PORT/PASSWORD.
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';

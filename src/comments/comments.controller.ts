@@ -17,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 import { CommentsService } from './comments.service';
 import { CreateCommentInput } from './dto/create-comment.input';
@@ -32,7 +33,7 @@ export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
   @Post()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 comments per minute
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Create a comment or reply' })

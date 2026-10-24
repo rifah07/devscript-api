@@ -35,16 +35,21 @@ export class Report {
   @Prop({ type: Types.ObjectId, required: true })
   declare targetId: Types.ObjectId;
 
-  @Prop({ enum: ReportTargetType, required: true })
+  @Prop({ type: String, enum: ReportTargetType, required: true })
   declare targetType: ReportTargetType;
 
-  @Prop({ enum: ReportReason, required: true })
+  @Prop({ type: String, enum: ReportReason, required: true })
   declare reason: ReportReason;
 
   @Prop({ default: '', maxlength: 500 })
   declare description: string;
 
-  @Prop({ enum: ReportStatus, default: ReportStatus.PENDING, index: true })
+  @Prop({
+    type: String,
+    enum: ReportStatus,
+    default: ReportStatus.PENDING,
+    index: true,
+  })
   declare status: ReportStatus;
 
   // Admin who reviewed this report

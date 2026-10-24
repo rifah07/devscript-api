@@ -8,6 +8,8 @@ import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { RefreshToken } from './schemas/refresh-token.schema';
+import { OneTimeToken } from './schemas/one-time-token.schema';
+import { EmailService } from '../email/email.service';
 
 // Mock bcrypt entirely — we don't want real hashing (slow) in unit tests,
 // we want to control exactly what it returns to test our logic branches
@@ -74,6 +76,21 @@ describe('AuthService', () => {
             findOne: jest.fn(),
             deleteOne: jest.fn(),
             deleteMany: jest.fn(),
+          },
+        },
+        {
+          provide: getModelToken(OneTimeToken.name),
+          useValue: {
+            create: jest.fn(),
+            findOneAndDelete: jest.fn(),
+            deleteMany: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendPasswordResetEmail: jest.fn(),
+            sendVerificationEmail: jest.fn(),
           },
         },
       ],

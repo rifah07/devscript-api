@@ -22,6 +22,7 @@ import { ReactionsService } from './reactions.service';
 import { ToggleReactionInput } from './dto/toggle-reaction.input';
 import { ReactionTargetType } from './schemas/reaction.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 
@@ -50,17 +51,17 @@ export class ReactionsController {
   @ApiOperation({ summary: 'Get reaction summary for a post or comment' })
   @ApiParam({ name: 'targetId', description: 'Post or Comment ID' })
   @ApiQuery({ name: 'targetType', enum: ReactionTargetType })
-  @ApiQuery({
-    name: 'userId',
-    required: false,
-    description: 'To check if user reacted',
-  })
   @ApiResponse({ status: 200, description: 'Reaction summary returned' })
+  @UseGuards(OptionalJwtAuthGuard)
   async getSummary(
     @Param('targetId') targetId: string,
     @Query('targetType') targetType: ReactionTargetType,
-    @Query('userId') userId?: string,
+    @CurrentUser() user: UserDocument | null,
   ) {
-    return this.reactionsService.getSummary(targetId, targetType, userId);
+    return this.reactionsService.getSummary(
+      targetId,
+      targetType,
+      user?._id.toString(),
+    );
   }
 }

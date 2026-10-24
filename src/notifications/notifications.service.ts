@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { PostSpace } from '../posts/schemas/post.schema';
+import { publicUser } from '../users/public-user-fields';
 
 import {
   Notification,
@@ -177,7 +179,8 @@ export class NotificationsService {
         .find(query)
         .sort({ _id: -1 })
         .limit(PAGE_SIZE + 1)
-        .populate('actor')
+        .populate(publicUser('actor'))
+        .populate({ path: 'postId', select: 'slug space' })
         .lean()
         .exec(),
       this.notificationModel.countDocuments({
@@ -269,6 +272,12 @@ export class NotificationsService {
 
   private toModel(doc: NotificationDocument): NotificationModel {
     const actor = doc.actor;
+    // postId is populated with { slug, space } when the post still exists
+    const post = doc.postId as unknown as {
+      _id?: Types.ObjectId;
+      slug?: string;
+      space?: PostSpace;
+    } | null;
     return {
       _id: doc._id.toString(),
       actor:
@@ -277,7 +286,9 @@ export class NotificationsService {
           : undefined,
       type: doc.type,
       message: doc.message,
-      postId: doc.postId?.toString(),
+      postId: post?._id?.toString() ?? doc.postId?.toString(),
+      postSlug: post?.slug,
+      postSpace: post?.space,
       commentId: doc.commentId?.toString(),
       isRead: doc.isRead,
       createdAt: doc.createdAt,

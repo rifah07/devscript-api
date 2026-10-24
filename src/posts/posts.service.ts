@@ -1,12 +1,14 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import slugify from 'slugify';
+import { createHash } from 'crypto';
+import { publicUser } from '../users/public-user-fields';
 
 import { Post, PostDocument, PostStatus } from './schemas/post.schema';
 import { PostModel, PaginatedPosts } from './models/post.model';
@@ -27,8 +29,48 @@ import { PostGalleryModel } from './models/post-gallery.model';
 import { NewsletterService } from '../newsletter/newsletter.service';
 import { TtsService } from '../ai/tts.service';
 import { PostSpace } from './schemas/post.schema';
+import {
+  makeExcerpt,
+  makeSlug,
+  readTimeMinutes,
+  defaultBodyFormat,
+} from './utils/post-logic.util';
+import { toPostModel } from './utils/post.mapper';
+import { AiService } from '../ai/ai.service';
+import { AiQuotaService } from '../ai/ai-quota.service';
+import { LruCache } from '../common/utils/lru-cache';
+import { dot, topK } from '../common/utils/top-k';
+import { Comment, CommentDocument } from '../comments/schemas/comment.schema';
+import {
+  Reaction,
+  ReactionDocument,
+} from '../reactions/schemas/reaction.schema';
+import {
+  Bookmark,
+  BookmarkDocument,
+} from '../bookmarks/schemas/bookmark.schema';
+import {
+  Notification,
+  NotificationDocument,
+} from '../notifications/schemas/notification.schema';
+import { Series, SeriesDocument } from '../series/schemas/series.schema';
 
 const PAGE_SIZE = 10;
+const MAX_GALLERY = 10;
+// Lists never need these: body can be 50 KB, uniqueViewers up to 1000 ids.
+const LIST_EXCLUDE = '-body -uniqueViewers';
+const POPULATE = [
+  publicUser('author'),
+  'category',
+  { path: 'series', select: 'title slug' },
+];
+
+type Requestor = UserDocument | null | undefined;
+
+// How many recent posts semantic "related" compares against. Brute-force
+// top-k over a few hundred 768-d vectors is a few ms; past ~5k posts switch
+// to Atlas Vector Search.
+const RELATED_CANDIDATES = 500;
 
 @Injectable()
 export class PostsService {
@@ -38,8 +80,25 @@ export class PostsService {
     private readonly followsService: FollowsService,
     private readonly categoriesService: CategoriesService,
     private readonly newsletterService: NewsletterService,
+    private readonly aiService: AiService,
+    private readonly aiQuota: AiQuotaService,
     private readonly ttsService: TtsService,
+    private readonly uploadService: UploadService,
+    @InjectModel(Comment.name)
+    private readonly commentModel: Model<CommentDocument>,
+    @InjectModel(Reaction.name)
+    private readonly reactionModel: Model<ReactionDocument>,
+    @InjectModel(Bookmark.name)
+    private readonly bookmarkModel: Model<BookmarkDocument>,
+    @InjectModel(Notification.name)
+    private readonly notificationModel: Model<NotificationDocument>,
+    @InjectModel(Series.name)
+    private readonly seriesModel: Model<SeriesDocument>,
   ) {}
+
+  private readonly logger = new Logger(PostsService.name);
+  // Same question about the same version of a post → same answer, no AI call.
+  private readonly answers = new LruCache<string, string>(500);
 
   async create(
     input: CreatePostInput,
@@ -54,42 +113,61 @@ export class PostsService {
         `postType "${postType}" is not valid for space "${input.space}"`,
       );
     }
-    const slug = this.generateUniqueSlug(input.title);
-    const readTime = this.calculateReadTime(input.body);
+    // Validate before writing, so a bad category never leaves an orphan post.
+    if (input.categoryId)
+      await this.assertCategoryInSpace(input.categoryId, input.space);
 
     const post = await this.postModel.create({
       title: input.title,
-      slug,
+      slug: makeSlug(input.title, input.space),
       body: input.body,
+      excerpt: makeExcerpt(input.body),
+      bodyFormat: defaultBodyFormat(input.space),
       tags: input.tags ?? [],
       author: author._id,
       category: input.categoryId ? new Types.ObjectId(input.categoryId) : null,
       space: input.space,
       postType,
-      readTime,
+      readTime: readTimeMinutes(input.body),
     });
 
-    if (input.categoryId) {
-      const category = await this.categoriesService.findById(input.categoryId);
-      if (category.space !== input.space) {
-        throw new BadRequestException(
-          `Category belongs to "${category.space}" space, but post is in "${input.space}" space`,
-        );
-      }
-    }
+    if (input.categoryId)
+      await this.categoriesService.incrementPostCount(input.categoryId);
 
-    await post.populate(['author', 'category']);
-    return this.toModel(post);
+    await post.populate(POPULATE);
+    return toPostModel(post);
   }
 
-  async findAll(filter: PostsFilterInput): Promise<PaginatedPosts> {
+  // Anonymous callers see PUBLISHED only. Drafts/scheduled are listed only
+  // to their own author: asking for `status: DRAFT` or for your own
+  // authorId scopes the list to you, whoever you claim to be.
+  async findAll(
+    filter: PostsFilterInput,
+    requestor?: Requestor,
+  ): Promise<PaginatedPosts> {
     const query: Record<string, unknown> = {};
 
-    if (filter.status) query['status'] = filter.status;
     if (filter.tag) query['tags'] = filter.tag;
-    if (filter.authorId) query['author'] = new Types.ObjectId(filter.authorId);
     if (filter.space) query['space'] = filter.space;
     if (filter.postType) query['postType'] = filter.postType;
+    if (filter.categoryId)
+      query['category'] = new Types.ObjectId(filter.categoryId);
+
+    const wantsHidden = filter.status && filter.status !== PostStatus.PUBLISHED;
+    const isOwnList =
+      !!requestor && filter.authorId === requestor._id.toString();
+
+    if (wantsHidden || isOwnList) {
+      if (!requestor) return { posts: [], hasNextPage: false, totalCount: 0 };
+      query['author'] = requestor._id;
+      if (filter.status) query['status'] = filter.status;
+    } else {
+      query['status'] = PostStatus.PUBLISHED;
+      if (filter.authorId)
+        query['author'] = new Types.ObjectId(filter.authorId);
+    }
+
+    const totalCount = await this.postModel.countDocuments(query);
 
     if (filter.cursor) {
       query['_id'] = { $lt: new Types.ObjectId(filter.cursor) };
@@ -97,18 +175,18 @@ export class PostsService {
 
     const posts = await this.postModel
       .find(query)
+      .select(LIST_EXCLUDE)
       .sort({ _id: -1 })
       .limit(PAGE_SIZE + 1)
-      .populate('author')
+      .populate(POPULATE)
       .lean()
       .exec();
 
     const hasNextPage = posts.length > PAGE_SIZE;
     const sliced = hasNextPage ? posts.slice(0, PAGE_SIZE) : posts;
-    const totalCount = await this.postModel.countDocuments(query);
 
     return {
-      posts: sliced.map((p) => this.toModel(p)),
+      posts: sliced.map((p) => toPostModel(p)),
       nextCursor: hasNextPage
         ? sliced[sliced.length - 1]?._id.toString()
         : undefined,
@@ -117,117 +195,136 @@ export class PostsService {
     };
   }
 
-  async findBySlug(slug: string): Promise<PostModel> {
+  async findBySlug(slug: string, requestor?: Requestor): Promise<PostModel> {
     const post = await this.postModel
       .findOne({ slug })
-      .populate('author')
+      .populate(POPULATE)
       .lean()
       .exec();
 
-    if (!post) throw new NotFoundException(`Post "${slug}" not found`);
-    return this.toModel(post);
+    return toPostModel(this.assertVisible(post, requestor));
   }
 
-  async findById(id: string): Promise<PostModel> {
+  // For comments, reactions, bookmarks: you may only interact with a post
+  // that exists and is published. Hidden posts look missing (404).
+  async findPublished(id: string): Promise<PostModel> {
     const post = await this.postModel
-      .findById(id)
-      .populate('author')
+      .findOne({ _id: id, status: PostStatus.PUBLISHED })
+      .select(LIST_EXCLUDE)
+      .populate(publicUser('author'))
       .lean()
       .exec();
-
     if (!post) throw new NotFoundException('Post not found');
-    return this.toModel(post);
+    return toPostModel(post);
+  }
+
+  // Returns the raw document after checking the requestor may edit it.
+  async findEditable(
+    id: string,
+    requestor: UserDocument,
+  ): Promise<PostDocument> {
+    const post = await this.postModel.findById(id);
+    if (!post) throw new NotFoundException('Post not found');
+    this.assertIsAuthorOrAdmin(post, requestor);
+    return post;
   }
 
   async update(
     input: UpdatePostInput,
     requestor: UserDocument,
   ): Promise<PostModel> {
-    const post = await this.postModel.findById(input.id);
-    if (!post) throw new NotFoundException('Post not found');
+    const post = await this.findEditable(input.id, requestor);
 
-    if (input.postType || input.space) {
-      const finalSpace = input.space ?? post.space;
-      const finalPostType = input.postType ?? post.postType;
-
-      if (!isValidPostTypeForSpace(finalSpace, finalPostType)) {
-        throw new BadRequestException(
-          `postType "${finalPostType}" is not valid for space "${finalSpace}"`,
-        );
-      }
+    const finalSpace = input.space ?? post.space;
+    const finalPostType = input.postType ?? post.postType;
+    if (!isValidPostTypeForSpace(finalSpace, finalPostType)) {
+      throw new BadRequestException(
+        `postType "${finalPostType}" is not valid for space "${finalSpace}"`,
+      );
     }
 
-    if (input.categoryId) {
-      const category = await this.categoriesService.findById(input.categoryId);
-      if (category.space !== input.space) {
-        throw new BadRequestException(
-          `Category belongs to "${category.space}" space, but post is in "${input.space}" space`,
-        );
-      }
+    const previousCategory = post.category?.toString();
+    if (input.categoryId && input.categoryId !== previousCategory) {
+      await this.assertCategoryInSpace(input.categoryId, finalSpace);
+      post.category = new Types.ObjectId(input.categoryId);
     }
 
-    this.assertIsAuthorOrAdmin(post, requestor);
-
-    if (input.title) {
-      post.title = input.title;
-      post.slug = this.generateUniqueSlug(input.title);
-    }
+    // Slug is deliberately NOT regenerated: shared links, Pinterest pins and
+    // RSS guids all point at it. A changed title keeps the original URL.
+    if (input.title) post.title = input.title;
     if (input.body) {
       post.body = input.body;
-      post.readTime = this.calculateReadTime(input.body);
+      post.excerpt = makeExcerpt(input.body);
+      post.readTime = readTimeMinutes(input.body);
     }
     if (input.tags) post.tags = input.tags;
+    if (input.space) post.space = input.space;
+    if (input.postType) post.postType = input.postType;
 
+    const contentChanged = !!(input.title || input.body);
     await post.save();
-    await post.populate('author');
-    return this.toModel(post);
+    if (contentChanged && post.status === PostStatus.PUBLISHED)
+      await this.embedPost(post);
+
+    if (input.categoryId && input.categoryId !== previousCategory) {
+      await this.categoriesService.incrementPostCount(input.categoryId);
+      if (previousCategory)
+        await this.categoriesService.decrementPostCount(previousCategory);
+    }
+
+    await post.populate(POPULATE);
+    return toPostModel(post);
   }
 
   async publish(id: string, requestor: UserDocument): Promise<PostModel> {
-    const post = await this.postModel.findById(id);
-    if (!post) throw new NotFoundException('Post not found');
+    const post = await this.findEditable(id, requestor);
 
-    this.assertIsAuthorOrAdmin(post, requestor);
+    // Idempotent: publishing twice must not email every subscriber twice.
+    if (post.status !== PostStatus.PUBLISHED) {
+      post.status = PostStatus.PUBLISHED;
+      post.scheduledAt = null;
+      this.applyOgMetadata(post);
+      await post.save();
+      await this.afterPublish(post, requestor);
+    }
 
-    post.status = PostStatus.PUBLISHED;
-    await post.save();
-    // Generate OG metadata for social sharing
-    await this.generateOgMetadata(id);
-
-    await post.populate(['author', 'category']);
-    const result = this.toModel(post);
-
-    // Notify all followers about the new post — fire and forget
-    // We don't await this — no reason to slow down the publish response
-    void this.followsService
-      .getFollowerIds(requestor._id.toString())
-      .then((followerIds) =>
-        this.notificationsService.notifyNewPost({
-          followerIds,
-          actor: requestor,
-          postId: id,
-          postTitle: post.title,
-        }),
-      );
-
-    // email every confirmed newsletter subscriber of this space
-    // Fire and forget - publishing should never wait on email delivery
-    void this.newsletterService.notifySubscribersOfNewPost(
-      post.space,
-      post.title,
-      post.summary || post.body.slice(0, 150),
-      post.slug,
-    );
-    return result;
+    await post.populate(POPULATE);
+    return toPostModel(post);
   }
 
+  // MongoDB has no ON DELETE CASCADE, so the cleanup is explicit: nothing
+  // may keep pointing at a deleted post, and counters must not drift.
   async remove(id: string, requestor: UserDocument): Promise<boolean> {
-    const post = await this.postModel.findById(id);
-    if (!post) throw new NotFoundException('Post not found');
-
-    this.assertIsAuthorOrAdmin(post, requestor);
+    const post = await this.findEditable(id, requestor);
+    const commentIds = await this.commentModel
+      .find({ post: post._id })
+      .distinct('_id');
 
     await post.deleteOne();
+    await Promise.all([
+      this.commentModel.deleteMany({ post: post._id }),
+      this.reactionModel.deleteMany({
+        targetId: { $in: [post._id, ...commentIds] },
+      }),
+      this.bookmarkModel.deleteMany({ post: post._id }),
+      this.notificationModel.deleteMany({ postId: post._id }),
+      post.category &&
+        this.categoriesService.decrementPostCount(post.category.toString()),
+      post.series &&
+        this.seriesModel.updateOne(
+          { _id: post.series },
+          { $inc: { postCount: -1 } },
+        ),
+    ]);
+
+    // Files last, and best effort: a Cloudinary hiccup must not undo the delete.
+    const files = [
+      ...post.gallery.map((g) => g.publicId),
+      post.narrationPublicId,
+    ].filter(Boolean);
+    await Promise.allSettled(
+      files.map((f) => this.uploadService.deleteFile(f)),
+    );
     return true;
   }
 
@@ -235,51 +332,40 @@ export class PostsService {
     await this.postModel.updateOne({ _id: id }, { summary });
   }
 
-  async recordView(postId: string, viewerId?: string): Promise<void> {
-    // viewerId present = logged-in user
-    // viewerId absent = anonymous visitor
+  // Logged-in viewers count once per account. Anonymous viewers count once
+  // per device per day: a hash of ip + user agent + date, so no raw IP is
+  // ever stored and the key can't be linked across days.
+  async recordView(
+    postId: string,
+    requestor: Requestor,
+    ip = '',
+    userAgent = '',
+  ): Promise<void> {
+    const viewerKey = requestor
+      ? requestor._id.toString()
+      : createHash('sha256')
+          .update(`${ip}|${userAgent}|${new Date().toISOString().slice(0, 10)}`)
+          .digest('hex');
 
-    if (viewerId) {
-      // For logged-in users: only count once per user using $addToSet
-      // $addToSet adds to array only if not already present — atomic, no race condition
-      // $inc increments viewCount only if the viewer was actually added
-      const result = await this.postModel.updateOne(
-        {
-          _id: new Types.ObjectId(postId),
-          uniqueViewers: { $ne: viewerId }, // only if not already viewed
-        },
-        {
-          $addToSet: { uniqueViewers: viewerId },
-          $inc: { viewCount: 1 },
-        },
-      );
-
-      // Cap uniqueViewers array at 1000 to prevent unbounded growth
-      if (result.modifiedCount > 0) {
-        await this.postModel.updateOne(
-          { _id: new Types.ObjectId(postId) },
-          { $slice: { uniqueViewers: -1000 } }, // keep last 1000
-        );
-      }
-    } else {
-      // Anonymous - just increment view count
-      await this.postModel.updateOne(
-        { _id: new Types.ObjectId(postId) },
-        { $inc: { viewCount: 1 } },
-      );
-    }
+    await this.postModel.updateOne(
+      {
+        _id: postId,
+        status: PostStatus.PUBLISHED,
+        uniqueViewers: { $ne: viewerKey },
+      },
+      {
+        $inc: { viewCount: 1 },
+        // $push + $slice keeps only the newest 1000 keys, atomically.
+        $push: { uniqueViewers: { $each: [viewerKey], $slice: -1000 } },
+      },
+    );
   }
 
   async generateNarration(
     postId: string,
     requestor: UserDocument,
-    ttsService: TtsService,
-    uploadService: UploadService,
   ): Promise<PostModel> {
-    const post = await this.postModel.findById(postId);
-    if (!post) throw new NotFoundException('Post not found');
-
-    this.assertIsAuthorOrAdmin(post, requestor);
+    const post = await this.findEditable(postId, requestor);
 
     // Narration only makes sense for shorter, reflective content —
     // not long technical articles with code blocks
@@ -289,15 +375,17 @@ export class PostsService {
       );
     }
 
-    const text = ttsService.prepareTextForNarration(post.title, post.body);
-    const narration = await ttsService.generateNarration(text);
+    // Narration is the most expensive AI call: it counts against the quota.
+    await this.aiQuota.consume(requestor);
+    const text = this.ttsService.prepareTextForNarration(post.title, post.body);
+    const narration = await this.ttsService.generateNarration(text);
 
     // Delete the old narration file if regenerating
     if (post.narrationPublicId) {
-      await uploadService.deleteFile(post.narrationPublicId);
+      await this.uploadService.deleteFile(post.narrationPublicId);
     }
 
-    const uploaded = await uploadService.uploadNarrationAudio(
+    const uploaded = await this.uploadService.uploadNarrationAudio(
       narration.audioBuffer,
       postId,
     );
@@ -308,9 +396,9 @@ export class PostsService {
     post.narrationGeneratedAt = new Date();
 
     await post.save();
-    await post.populate(['author', 'category']);
+    await post.populate(POPULATE);
 
-    return this.toModel(post);
+    return toPostModel(post);
   }
 
   async schedulePost(
@@ -318,33 +406,33 @@ export class PostsService {
     scheduledAt: string,
     requestor: UserDocument,
   ): Promise<PostModel> {
-    const post = await this.postModel.findById(postId);
-    if (!post) throw new NotFoundException('Post not found');
+    const post = await this.findEditable(postId, requestor);
 
-    this.assertIsAuthorOrAdmin(post, requestor);
+    if (post.status === PostStatus.PUBLISHED) {
+      throw new BadRequestException('Post is already published');
+    }
 
     const scheduleDate = new Date(scheduledAt);
-
-    if (scheduleDate.getTime() <= Date.now()) {
+    if (
+      Number.isNaN(scheduleDate.getTime()) ||
+      scheduleDate.getTime() <= Date.now()
+    ) {
       throw new BadRequestException('scheduledAt must be a future date');
     }
 
     post.status = PostStatus.SCHEDULED;
     post.scheduledAt = scheduleDate;
     await post.save();
-    await post.populate(['author', 'category']);
+    await post.populate(POPULATE);
 
-    return this.toModel(post);
+    return toPostModel(post);
   }
 
   async cancelSchedule(
     postId: string,
     requestor: UserDocument,
   ): Promise<PostModel> {
-    const post = await this.postModel.findById(postId);
-    if (!post) throw new NotFoundException('Post not found');
-
-    this.assertIsAuthorOrAdmin(post, requestor);
+    const post = await this.findEditable(postId, requestor);
 
     if (post.status !== PostStatus.SCHEDULED) {
       throw new BadRequestException('Post is not currently scheduled');
@@ -353,48 +441,29 @@ export class PostsService {
     post.status = PostStatus.DRAFT;
     post.scheduledAt = null;
     await post.save();
-    await post.populate(['author', 'category']);
+    await post.populate(POPULATE);
 
-    return this.toModel(post);
+    return toPostModel(post);
   }
 
   // Called by BOTH the cron job (traditional server) AND
   // the external trigger endpoint (Vercel Cron Jobs)
   // Publishes every post whose scheduledAt time has passed
   async publishDueScheduledPosts(): Promise<number> {
-    const now = new Date();
-
     const duePosts = await this.postModel
       .find({
         status: PostStatus.SCHEDULED,
-        scheduledAt: { $lte: now },
+        scheduledAt: { $lte: new Date() },
       })
-      .populate('author')
+      .populate(publicUser('author'))
       .exec();
-
-    if (duePosts.length === 0) return 0;
 
     for (const post of duePosts) {
       post.status = PostStatus.PUBLISHED;
       post.scheduledAt = null;
+      this.applyOgMetadata(post);
       await post.save();
-
-      // Reuse the same OG metadata + notification logic as manual publish
-      await this.generateOgMetadata(post._id.toString());
-
-      const author = post.author as unknown as UserDocument;
-
-      // Fire and forget — don't block the batch on notification delivery
-      void this.followsService
-        .getFollowerIds(author._id.toString())
-        .then((followerIds) =>
-          this.notificationsService.notifyNewPost({
-            followerIds,
-            actor: author,
-            postId: post._id.toString(),
-            postTitle: post.title,
-          }),
-        );
+      await this.afterPublish(post, post.author as unknown as UserDocument);
     }
 
     return duePosts.length;
@@ -426,9 +495,10 @@ export class PostsService {
       ]),
       this.postModel
         .find({ author: authorObjectId })
+        .select(LIST_EXCLUDE)
         .sort({ viewCount: -1 })
         .limit(5)
-        .populate('author')
+        .populate(publicUser('author'))
         .lean()
         .exec(),
     ]);
@@ -437,22 +507,32 @@ export class PostsService {
       totalViews: stats[0]?.totalViews ?? 0,
       totalPosts: stats[0]?.totalPosts ?? 0,
       totalBookmarks: stats[0]?.totalBookmarks ?? 0,
-      topPosts: topPosts.map((p) => this.toModel(p)),
+      topPosts: topPosts.map((p) => toPostModel(p)),
     };
   }
 
-  async getRelatedPosts(postId: string, limit = 5): Promise<PostModel[]> {
-    const post = await this.postModel.findById(postId);
-    if (!post) throw new NotFoundException('Post not found');
+  async getRelatedPosts(
+    postId: string,
+    requestor: Requestor,
+    limit = 5,
+  ): Promise<PostModel[]> {
+    const post = this.assertVisible<PostDocument>(
+      await this.postModel.findById(postId),
+      requestor,
+    );
 
-    // Build a scoring pipeline:
+    const semantic = await this.semanticRelated(post, limit);
+    if (semantic.length) return semantic;
+
+    // Fallback when embeddings aren't available. Scoring pipeline:
     // +3 points for same category
     // +1 point per shared tag
-    // Excludes the post itself, only published posts
+    // Excludes the post itself; same space and published only
     const related = await this.postModel.aggregate([
       {
         $match: {
           _id: { $ne: post._id },
+          space: post.space,
           status: PostStatus.PUBLISHED,
           $or: [{ category: post.category }, { tags: { $in: post.tags } }],
         },
@@ -475,36 +555,36 @@ export class PostsService {
         },
       },
       { $sort: { relevanceScore: -1, createdAt: -1 } },
-      { $limit: limit },
+      { $limit: Math.min(Math.max(limit, 1), 20) },
+      { $project: { body: 0, uniqueViewers: 0 } },
     ]);
 
     // Populate author and category on aggregation results
     const populated = await this.postModel.populate(related, [
-      { path: 'author' },
+      publicUser('author'),
       { path: 'category' },
     ]);
 
-    return populated.map((p) => this.toModel(p as PostDocument));
+    return populated.map((p) => toPostModel(p as PostDocument));
   }
 
   async addGalleryImages(
     postId: string,
     files: Express.Multer.File[],
     requestor: UserDocument,
-    uploadService: UploadService,
   ): Promise<PostModel> {
-    const post = await this.postModel.findById(postId);
-    if (!post) throw new NotFoundException('Post not found');
+    const post = await this.findEditable(postId, requestor);
 
-    this.assertIsAuthorOrAdmin(post, requestor);
-
-    if (post.gallery.length + files.length > 10) {
-      throw new BadRequestException('Maximum 10 images allowed per post');
+    if (!files?.length) throw new BadRequestException('No files uploaded');
+    if (post.gallery.length + files.length > MAX_GALLERY) {
+      throw new BadRequestException(
+        `Maximum ${MAX_GALLERY} images allowed per post`,
+      );
     }
 
     // Upload all images in parallel — much faster than sequential
     const uploadResults = await Promise.all(
-      files.map((file) => uploadService.uploadPostCover(file)),
+      files.map((file) => this.uploadService.uploadGalleryImage(file)),
     );
 
     const newImages = uploadResults.map((result, index) => ({
@@ -527,39 +607,112 @@ export class PostsService {
     }
 
     await post.save();
-    await post.populate(['author', 'category']);
-    return this.toModel(post);
+    await post.populate(POPULATE);
+    return toPostModel(post);
   }
 
   async removeGalleryImage(
     postId: string,
     publicId: string,
     requestor: UserDocument,
-    uploadService: UploadService,
   ): Promise<PostModel> {
-    const post = await this.postModel.findById(postId);
-    if (!post) throw new NotFoundException('Post not found');
+    const post = await this.findEditable(postId, requestor);
+    // Without this check any logged-in author could delete ANY Cloudinary
+    // asset (someone else's avatar, another post's image) by passing its id.
+    this.findGalleryImage(post, publicId);
 
-    this.assertIsAuthorOrAdmin(post, requestor);
+    post.gallery = post.gallery
+      .filter((img) => img.publicId !== publicId)
+      .sort((a, b) => a.order - b.order)
+      .map((img, order) => ({ ...img, order }));
 
-    post.gallery = post.gallery.filter((img) => img.publicId !== publicId);
+    if (post.coverImagePublicId === publicId) {
+      const next = post.gallery[0];
+      post.coverImageUrl = next?.url ?? '';
+      post.coverImagePublicId = next?.publicId ?? '';
+      post.ogImage = next?.url ?? '';
+    }
 
-    // Delete from Cloudinary too
-    await uploadService.deleteFile(publicId);
-
+    // Save first: the DB must never point at an asset that no longer exists.
     await post.save();
-    await post.populate(['author', 'category']);
-    return this.toModel(post);
+    await this.uploadService.deleteFile(publicId);
+
+    await post.populate(POPULATE);
+    return toPostModel(post);
   }
 
-  async getPostGallery(postId: string): Promise<PostGalleryModel> {
-    const post = await this.postModel
-      .findById(postId)
-      .select('title gallery')
-      .lean()
-      .exec();
+  async setPostCover(
+    postId: string,
+    publicId: string,
+    requestor: UserDocument,
+  ): Promise<PostModel> {
+    const post = await this.findEditable(postId, requestor);
+    const image = this.findGalleryImage(post, publicId);
 
-    if (!post) throw new NotFoundException('Post not found');
+    post.coverImageUrl = image.url;
+    post.coverImagePublicId = image.publicId;
+    post.ogImage = image.url;
+
+    await post.save();
+    await post.populate(POPULATE);
+    return toPostModel(post);
+  }
+
+  async reorderGallery(
+    postId: string,
+    publicIds: string[],
+    requestor: UserDocument,
+  ): Promise<PostModel> {
+    const post = await this.findEditable(postId, requestor);
+
+    // Must be an exact permutation of the current gallery: nothing added,
+    // dropped, or duplicated.
+    const current = new Set(post.gallery.map((img) => img.publicId));
+    const isPermutation =
+      publicIds.length === current.size &&
+      new Set(publicIds).size === publicIds.length &&
+      publicIds.every((id) => current.has(id));
+    if (!isPermutation) {
+      throw new BadRequestException(
+        'publicIds must list every gallery image exactly once',
+      );
+    }
+
+    const position = new Map(publicIds.map((id, i) => [id, i]));
+    for (const img of post.gallery) img.order = position.get(img.publicId) ?? 0;
+    post.gallery.sort((a, b) => a.order - b.order);
+
+    await post.save();
+    await post.populate(POPULATE);
+    return toPostModel(post);
+  }
+
+  async updateGalleryImageAlt(
+    postId: string,
+    publicId: string,
+    alt: string,
+    requestor: UserDocument,
+  ): Promise<PostModel> {
+    const post = await this.findEditable(postId, requestor);
+    this.findGalleryImage(post, publicId).alt = alt.trim().slice(0, 300);
+
+    await post.save();
+    await post.populate(POPULATE);
+    return toPostModel(post);
+  }
+
+  async getPostGallery(
+    postId: string,
+    requestor?: Requestor,
+  ): Promise<PostGalleryModel> {
+    const post = this.assertVisible(
+      await this.postModel
+        .findById(postId)
+        .select('title gallery status author')
+        .lean()
+        .exec(),
+      requestor,
+    );
 
     // Always return images sorted by their intended reading order
     const sortedImages = [...post.gallery].sort((a, b) => a.order - b.order);
@@ -571,43 +724,168 @@ export class PostsService {
     };
   }
 
+  // Only counts images that really belong to a published post.
   async incrementImageDownloadCount(
     postId: string,
     publicId: string,
   ): Promise<void> {
     // $ positional operator updates only the matching array element
     await this.postModel.updateOne(
-      { _id: postId, 'gallery.publicId': publicId },
+      {
+        _id: postId,
+        status: PostStatus.PUBLISHED,
+        'gallery.publicId': publicId,
+      },
       { $inc: { 'gallery.$.downloadCount': 1 } },
-    );
-  }
-
-  // Generate Open Graph metadata automatically on publish
-  async generateOgMetadata(postId: string): Promise<void> {
-    const post = await this.postModel.findById(postId);
-    if (!post) return;
-
-    const ogTitle = post.title.slice(0, 60);
-    const ogDescription =
-      post.summary || post.body.slice(0, 160).trim() + '...';
-    const ogImage = post.coverImageUrl || post.gallery[0]?.url || '';
-
-    await this.postModel.updateOne(
-      { _id: postId },
-      { $set: { ogTitle, ogDescription, ogImage } },
     );
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
 
-  private generateUniqueSlug(title: string): string {
-    const base = slugify(title, { lower: true, strict: true });
-    return `${base}-${Date.now()}`;
+  // Hidden posts answer 404, not 403: a 403 would confirm the draft exists.
+  private assertVisible<T extends { status: PostStatus; author: unknown }>(
+    post: T | null,
+    requestor: Requestor,
+  ): T {
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.status === PostStatus.PUBLISHED) return post;
+
+    // author is an ObjectId, or a populated user document
+    const authorId =
+      post.author instanceof Types.ObjectId
+        ? post.author.toString()
+        : (post.author as { _id: Types.ObjectId })._id.toString();
+    const allowed =
+      !!requestor &&
+      (requestor.role === UserRole.ADMIN ||
+        requestor._id.toString() === authorId);
+    if (!allowed) throw new NotFoundException('Post not found');
+    return post;
   }
 
-  private calculateReadTime(body: string): number {
-    const words = body.trim().split(/\s+/).length;
-    return Math.max(1, Math.ceil(words / 200));
+  private findGalleryImage(post: PostDocument, publicId: string) {
+    const image = post.gallery.find((img) => img.publicId === publicId);
+    if (!image) throw new NotFoundException('Image not found in this post');
+    return image;
+  }
+
+  private async assertCategoryInSpace(
+    categoryId: string,
+    space: PostSpace,
+  ): Promise<void> {
+    const category = await this.categoriesService.findById(categoryId);
+    if (category.space !== space) {
+      throw new BadRequestException(
+        `Category belongs to "${category.space}" space, but post is in "${space}" space`,
+      );
+    }
+  }
+
+  // Open Graph fields for rich link previews, set just before saving.
+  private applyOgMetadata(post: PostDocument): void {
+    post.ogTitle = post.title.slice(0, 60);
+    post.ogDescription = post.summary || makeExcerpt(post.body, 160);
+    post.ogImage = post.coverImageUrl || post.gallery[0]?.url || '';
+  }
+
+  // Awaited, not fire-and-forget: on serverless hosts work that runs after
+  // the response is sent can be frozen mid-way. allSettled so one failing
+  // side effect (say, email) doesn't stop the others or fail the publish.
+  private async afterPublish(
+    post: PostDocument,
+    author: UserDocument,
+  ): Promise<void> {
+    const results = await Promise.allSettled([
+      this.followsService
+        .getFollowerIds(author._id.toString())
+        .then((followerIds) =>
+          this.notificationsService.notifyNewPost({
+            followerIds,
+            actor: author,
+            postId: post._id.toString(),
+            postTitle: post.title,
+          }),
+        ),
+      this.newsletterService.notifySubscribersOfNewPost(
+        post.space,
+        post.title,
+        post.summary || post.excerpt,
+        post.slug,
+      ),
+      this.embedPost(post),
+    ]);
+    for (const r of results) {
+      if (r.status === 'rejected')
+        this.logger.warn(`After-publish step failed: ${String(r.reason)}`);
+    }
+  }
+
+  // ─── AI: embeddings, related posts, questions ─────────────────────────────
+
+  private async embedPost(post: PostDocument): Promise<number[] | null> {
+    const vector = await this.aiService.embed(`${post.title}\n\n${post.body}`);
+    if (vector)
+      await this.postModel.updateOne(
+        { _id: post._id },
+        { $set: { embedding: vector } },
+      );
+    return vector;
+  }
+
+  // Nearest neighbours by meaning, not by shared tags. Lazy backfill: a
+  // post published before embeddings existed gets one the first time it's
+  // read.
+  private async semanticRelated(
+    post: PostDocument,
+    limit: number,
+  ): Promise<PostModel[]> {
+    if (post.status !== PostStatus.PUBLISHED) return [];
+    const source =
+      (await this.postModel.findById(post._id).select('+embedding').lean())
+        ?.embedding ?? (await this.embedPost(post));
+    if (!source?.length) return [];
+
+    const candidates = await this.postModel
+      .find({
+        _id: { $ne: post._id },
+        space: post.space,
+        status: PostStatus.PUBLISHED,
+        'embedding.0': { $exists: true },
+      })
+      .select('+embedding -body -uniqueViewers')
+      .sort({ _id: -1 })
+      .limit(RELATED_CANDIDATES)
+      .lean();
+
+    const best = topK(candidates, Math.min(Math.max(limit, 1), 20), (c) =>
+      dot(source, c.embedding ?? []),
+    );
+    const populated = await this.postModel.populate(best, [
+      publicUser('author'),
+      { path: 'category' },
+    ]);
+    return populated.map((p) => toPostModel(p as PostDocument));
+  }
+
+  async answerQuestion(postId: string, question: string): Promise<string> {
+    const post = await this.postModel
+      .findOne({ _id: postId, status: PostStatus.PUBLISHED })
+      .select('title body updatedAt')
+      .lean();
+    if (!post) throw new NotFoundException('Post not found');
+
+    // Keyed by post version, so an edited post never serves stale answers.
+    const key = `${postId}:${post.updatedAt?.getTime()}:${question.toLowerCase().replace(/\s+/g, ' ')}`;
+    const cached = this.answers.get(key);
+    if (cached) return cached;
+
+    const answer = await this.aiService.answerFromArticle(
+      post.title,
+      post.body,
+      question,
+    );
+    if (answer) this.answers.set(key, answer);
+    return answer;
   }
 
   private assertIsAuthorOrAdmin(post: PostDocument, user: UserDocument): void {
@@ -617,43 +895,5 @@ export class PostsService {
     if (!isAuthor && !isAdmin) {
       throw new ForbiddenException('You can only modify your own posts');
     }
-  }
-
-  private toModel(doc: PostDocument): PostModel {
-    const author = doc.author;
-    const category = doc.category;
-
-    return {
-      _id: doc._id.toString(),
-      title: doc.title,
-      slug: doc.slug,
-      body: doc.body,
-      summary: doc.summary,
-      tags: doc.tags,
-      space: doc.space,
-      postType: doc.postType,
-      coverImageUrl: doc.coverImageUrl,
-      gallery: doc.gallery,
-      ogTitle: doc.ogTitle,
-      ogDescription: doc.ogDescription,
-      ogImage: doc.ogImage,
-      narrationUrl: doc.narrationUrl || undefined,
-      narrationDuration: doc.narrationDuration || undefined,
-      narrationGeneratedAt: doc.narrationGeneratedAt || undefined,
-      author:
-        author && typeof author === 'object' && '_id' in author
-          ? (author as unknown as PostModel['author'])
-          : undefined,
-      category:
-        category && typeof category === 'object' && '_id' in category
-          ? (category as unknown as PostModel['category'])
-          : undefined,
-      status: doc.status,
-      readTime: doc.readTime,
-      viewCount: doc.viewCount,
-      bookmarksCount: doc.bookmarksCount,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
-    };
   }
 }

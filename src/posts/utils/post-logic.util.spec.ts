@@ -1,56 +1,42 @@
-import slugify from 'slugify';
+import { PostSpace } from '../schemas/post.schema';
+import { makeExcerpt, makeSlug, readTimeMinutes } from './post-logic.util';
 
-// Extract these as standalone testable functions if not already,
-// or test them via the service (shown below) - this file demonstrates
-// testing pure logic in isolation, the fastest and most reliable test type
-describe('Post slug and read time logic', () => {
-  describe('slug generation', () => {
-    it('should convert title to lowercase kebab-case', () => {
-      const result = slugify('My First Blog Post!', {
-        lower: true,
-        strict: true,
-      });
-      expect(result).toBe('my-first-blog-post');
-    });
-
-    it('should handle Bangla/non-Latin characters gracefully', () => {
-      const result = slugify('সন্ধ্যার আলো', { lower: true, strict: true });
-      // strict: true strips non-Latin characters - result should not be empty crash
-      expect(typeof result).toBe('string');
-    });
-
-    it('should strip special characters', () => {
-      const result = slugify('NestJS & GraphQL: A Guide!', {
-        lower: true,
-        strict: true,
-      });
-      expect(result).not.toMatch(/[&:!]/);
-    });
+describe('post logic', () => {
+  it('slugs Latin titles as kebab-case with a random suffix', () => {
+    expect(makeSlug('My First Post!', PostSpace.DEVSCRIPT)).toMatch(
+      /^my-first-post-[0-9a-f]{6}$/,
+    );
   });
 
-  describe('read time calculation', () => {
-    function calculateReadTime(body: string): number {
-      const words = body.trim().split(/\s+/).length;
-      return Math.max(1, Math.ceil(words / 200));
-    }
+  it('never produces an empty slug for Bangla titles', () => {
+    expect(makeSlug('সন্ধ্যার আলো', PostSpace.PERSONAL)).toMatch(
+      /^poem-[0-9a-f]{6}$/,
+    );
+  });
 
-    it('should return 1 minute minimum for very short text', () => {
-      expect(calculateReadTime('Just a few words here')).toBe(1);
-    });
+  it('gives different slugs for the same title', () => {
+    expect(makeSlug('Same', PostSpace.DEVSCRIPT)).not.toBe(
+      makeSlug('Same', PostSpace.DEVSCRIPT),
+    );
+  });
 
-    it('should calculate correctly for exactly 200 words', () => {
-      const body = Array(200).fill('word').join(' ');
-      expect(calculateReadTime(body)).toBe(1);
-    });
+  it('rounds read time up with a 1 minute minimum', () => {
+    expect(readTimeMinutes('one two')).toBe(1);
+    expect(readTimeMinutes(Array(401).fill('w').join(' '))).toBe(3);
+  });
 
-    it('should round up for 201 words', () => {
-      const body = Array(201).fill('word').join(' ');
-      expect(calculateReadTime(body)).toBe(2);
-    });
-
-    it('should calculate correctly for 1000 words', () => {
-      const body = Array(1000).fill('word').join(' ');
-      expect(calculateReadTime(body)).toBe(5);
-    });
+  it('strips markdown and code from excerpts', () => {
+    expect(
+      makeExcerpt('# Title\n\n```ts\nconst x = 1;\n```\nSome **bold** text'),
+    ).toBe('Title Some bold text');
+    expect(makeExcerpt('a'.repeat(300))).toHaveLength(201);
+    expect(
+      makeExcerpt(
+        '- single-use **token** [docs](https://x.dev)\n\n| A | B |\n|---|---|\n| 1 | 2 |',
+      ),
+    ).toBe('single-use token docs');
+    expect(makeExcerpt('Hi <script>alert(1)</script> there')).toBe(
+      'Hi alert(1) there',
+    );
   });
 });

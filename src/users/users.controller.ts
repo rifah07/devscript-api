@@ -22,6 +22,8 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
+import { UPLOAD_LIMITS } from '../common/services/upload.service';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 import { UsersService } from './users.service';
 import { UploadService } from '../common/services/upload.service';
@@ -53,7 +55,7 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'User returned' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async getUserById(@Param('id') id: string) {
-    return this.usersService.findById(id);
+    return this.usersService.findPublicById(id);
   }
 
   @Put('me')
@@ -69,7 +71,7 @@ export class UsersController {
   }
 
   @Post('me/avatar')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @ApiBearerAuth('JWT')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Upload or replace avatar image' })
@@ -86,7 +88,12 @@ export class UsersController {
   @ApiResponse({ status: 400, description: 'Invalid file type or size' })
   // FileInterceptor extracts the file from multipart form
   // memoryStorage keeps it in RAM as Buffer — required for Vercel
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: UPLOAD_LIMITS,
+    }),
+  )
   async uploadAvatar(
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: UserDocument,

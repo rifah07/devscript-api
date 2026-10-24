@@ -1,13 +1,26 @@
 import { Field, ID, ObjectType, Int, registerEnumType } from '@nestjs/graphql';
 import { PostStatus } from '../schemas/post.schema';
-import { UserModel } from '../../users/models/user.model';
+import { PublicUserModel } from '../../users/models/public-user.model';
 import { CategoryModel } from '../../categories/models/category.model';
-import { PostSpace, PostType } from '../schemas/post.schema';
+import { BodyFormat, PostSpace, PostType } from '../schemas/post.schema';
 import { GalleryImageModel } from './gallery-image.model';
 
 registerEnumType(PostSpace, { name: 'PostSpace' });
 registerEnumType(PostType, { name: 'PostType' });
 registerEnumType(PostStatus, { name: 'PostStatus' });
+registerEnumType(BodyFormat, { name: 'BodyFormat' });
+
+@ObjectType()
+export class SeriesRefModel {
+  @Field(() => ID)
+  declare _id: string;
+
+  @Field()
+  declare title: string;
+
+  @Field()
+  declare slug: string;
+}
 
 @ObjectType()
 export class PostModel {
@@ -20,8 +33,30 @@ export class PostModel {
   @Field()
   declare slug: string;
 
+  // Null in list queries: they send `excerpt` instead.
+  @Field({ nullable: true })
+  declare body?: string;
+
   @Field()
-  declare body: string;
+  declare excerpt: string;
+
+  @Field(() => BodyFormat)
+  declare bodyFormat: BodyFormat;
+
+  @Field()
+  declare featured: boolean;
+
+  @Field({ nullable: true })
+  declare scheduledAt?: Date;
+
+  @Field(() => SeriesRefModel, { nullable: true })
+  declare series?: SeriesRefModel;
+
+  @Field(() => Int, { nullable: true })
+  declare seriesOrder?: number;
+
+  // Internal: read by coverImageVariants, never serialized.
+  declare coverImagePublicId?: string;
 
   @Field({ nullable: true })
   declare summary?: string;
@@ -29,10 +64,9 @@ export class PostModel {
   @Field(() => [String])
   declare tags: string[];
 
-  // Author can be populated (full UserModel) or just an ID
   // nullable: true handles the case where author was deleted
-  @Field(() => UserModel, { nullable: true })
-  declare author?: UserModel;
+  @Field(() => PublicUserModel, { nullable: true })
+  declare author?: PublicUserModel;
 
   @Field(() => PostStatus)
   declare status: PostStatus;

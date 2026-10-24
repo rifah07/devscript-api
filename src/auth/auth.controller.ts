@@ -7,10 +7,18 @@ import {
   HttpCode,
   HttpStatus,
   UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Req } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import type { Response } from 'express';
+import { OAUTH_NONCE_COOKIE, parseState } from './oauth-state';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { UserDocument } from '../users/schemas/user.schema';
+import {
+  ResendVerificationInput,
+  VerifyEmailInput,
+} from './dto/verify-email.input';
 
 import { AuthService } from './auth.service';
 import { RegisterInput } from './dto/register.input';
@@ -21,6 +29,11 @@ import { Throttle } from '@nestjs/throttler';
 import { Query } from '@nestjs/common';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import type { GoogleProfile } from './strategies/google.strategy';
+import {
+  ExchangeCodeInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from './dto/password-reset.input';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -73,30 +86,94 @@ export class AuthController {
     @Res() res: Response,
     @Query('state') state?: string, // optional — carries which frontend/space initiated login
   ) {
-    const userAgent = req.headers['user-agent'];
-    const ua = Array.isArray(userAgent) ? userAgent[0] : userAgent;
+    const parsed = parseState(state);
+    const site =
+      parsed?.site === 'personal'
+        ? process.env.MISK_JOURNAL_URL
+        : process.env.DEVSCRIPT_URL;
+    // A login we didn't start (missing or malformed state) goes nowhere.
+    if (!parsed) return res.redirect(`${site}/login?error=google`);
 
-    const result = await this.authService.loginWithGoogle(req.user, ua ?? '');
-
-    this.setRefreshCookie(res, result.refreshToken ?? '');
-
-    // Redirect back to the frontend with the access token as a query param.
-    // The frontend reads it once from the URL, stores it in memory, then
-    // should immediately clean the URL (history.replaceState) so the token
-    // doesn't linger in browser history or get shared accidentally.
-    const redirectBase =
-      state === 'personal'
-        ? (process.env.MISK_JOURNAL_URL ?? 'http://localhost:5173')
-        : (process.env.DEVSCRIPT_URL ?? 'http://localhost:3000');
-
-    res.redirect(
-      `${redirectBase}/auth/callback?accessToken=${result.accessToken}`,
+    const user = await this.authService.findOrCreateGoogleUser(req.user);
+    const code = await this.authService.createOAuthCode(
+      user._id.toString(),
+      parsed.nonce,
     );
+
+    // No tokens in the URL (they'd sit in history and server logs), and no
+    // cookie here (it would land on the API's domain, not the site's).
+    // The frontend POSTs this code to /auth/google/exchange instead.
+    res.redirect(`${site}/auth/callback?code=${code}`);
+  }
+
+  @Post('google/exchange')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Trade a one-time Google login code for tokens' })
+  async exchangeGoogleCode(
+    @Body() dto: ExchangeCodeInput,
+    @Req() req: TypedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.exchangeOAuthCode(
+      dto.code,
+      req.cookies[OAUTH_NONCE_COOKIE],
+      this.extractUserAgent(req),
+    );
+    res.clearCookie(OAUTH_NONCE_COOKIE, { path: '/' });
+    this.setRefreshCookie(res, result.refreshToken ?? '');
+    return { accessToken: result.accessToken, user: result.user };
+  }
+
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Confirm an email address with the emailed token' })
+  async verifyEmail(@Body() dto: VerifyEmailInput) {
+    await this.authService.verifyEmail(dto.token);
+    return { message: 'Email confirmed.' };
+  }
+
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Email a new confirmation link to yourself' })
+  async resendVerification(
+    @CurrentUser() user: UserDocument,
+    @Body() dto: ResendVerificationInput,
+  ) {
+    await this.authService.resendVerificationEmail(user, dto.space);
+    return {
+      message: 'If your email isn’t confirmed yet, a new link is on its way.',
+    };
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @ApiOperation({ summary: 'Email a password reset link (always succeeds)' })
+  async forgotPassword(@Body() dto: ForgotPasswordInput) {
+    await this.authService.forgotPassword(dto.email, dto.space);
+    return {
+      message: 'If that email has an account, a reset link is on its way.',
+    };
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: 'Set a new password with a reset token' })
+  async resetPassword(@Body() dto: ResetPasswordInput) {
+    await this.authService.resetPassword(dto.token, dto.newPassword);
+    return { message: 'Password updated. Please log in again.' };
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  // Generous: one IP can be a whole campus. Guessing is pointless anyway,
+  // since refresh tokens are random, single-use and rotate on every call.
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   @ApiOperation({ summary: 'Refresh access token using cookie' })
   async refresh(
     @Req() req: TypedRequest,
@@ -104,9 +181,8 @@ export class AuthController {
   ) {
     const refreshToken = req.cookies['refresh_token'];
 
-    if (!refreshToken) {
-      return { message: 'No refresh token' };
-    }
+    // 401 (not 200) so the frontend's refresh() sees a failure.
+    if (!refreshToken) throw new UnauthorizedException('No refresh token');
 
     const userAgent = this.extractUserAgent(req);
     const result = await this.authService.refreshTokens(

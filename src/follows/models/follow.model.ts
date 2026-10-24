@@ -1,16 +1,16 @@
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
-import { UserModel } from '../../users/models/user.model';
+import { PublicUserModel } from '../../users/models/public-user.model';
 
 @ObjectType()
 export class FollowModel {
   @Field(() => ID)
   declare _id: string;
 
-  @Field(() => UserModel, { nullable: true })
-  declare follower?: UserModel;
+  @Field(() => PublicUserModel, { nullable: true })
+  declare follower?: PublicUserModel;
 
-  @Field(() => UserModel, { nullable: true })
-  declare following?: UserModel;
+  @Field(() => PublicUserModel, { nullable: true })
+  declare following?: PublicUserModel;
 
   @Field()
   declare createdAt: Date;
@@ -19,8 +19,8 @@ export class FollowModel {
 // Paginated list of followers/following
 @ObjectType()
 export class PaginatedUsers {
-  @Field(() => [UserModel])
-  declare users: UserModel[];
+  @Field(() => [PublicUserModel])
+  declare users: PublicUserModel[];
 
   @Field({ nullable: true })
   declare nextCursor?: string;

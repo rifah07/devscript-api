@@ -1,5 +1,5 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
-import { UserModel } from '../../users/models/user.model';
+import { PublicUserModel } from '../../users/models/public-user.model';
 
 @ObjectType()
 export class CommentModel {
@@ -9,8 +9,8 @@ export class CommentModel {
   @Field()
   declare body: string;
 
-  @Field(() => UserModel, { nullable: true })
-  declare author?: UserModel;
+  @Field(() => PublicUserModel, { nullable: true })
+  declare author?: PublicUserModel;
 
   @Field(() => ID)
   declare post: string;

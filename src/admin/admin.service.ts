@@ -5,6 +5,9 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { escapeRegex } from '../common/utils/escape-regex.util';
+import { toUserModel } from '../users/user.mapper';
+import { PostsService } from '../posts/posts.service';
 
 import { Report, ReportDocument, ReportStatus } from './schemas/report.schema';
 import { ReportModel, PaginatedReports } from './models/report.model';
@@ -33,6 +36,7 @@ const PAGE_SIZE = 20;
 @Injectable()
 export class AdminService {
   constructor(
+    private readonly postsService: PostsService,
     @InjectModel(Report.name)
     private readonly reportModel: Model<ReportDocument>,
     @InjectModel(User.name)
@@ -103,9 +107,10 @@ export class AdminService {
     if (filter.role) query['role'] = filter.role;
     if (filter.isActive !== undefined) query['isActive'] = filter.isActive;
     if (filter.search) {
+      const pattern = escapeRegex(filter.search);
       query['$or'] = [
-        { name: { $regex: filter.search, $options: 'i' } },
-        { email: { $regex: filter.search, $options: 'i' } },
+        { name: { $regex: pattern, $options: 'i' } },
+        { email: { $regex: pattern, $options: 'i' } },
       ];
     }
     if (filter.cursor) {
@@ -126,7 +131,7 @@ export class AdminService {
     const sliced = hasNextPage ? users.slice(0, PAGE_SIZE) : users;
 
     return {
-      users: sliced.map((u) => this.toUserModel(u)),
+      users: sliced.map((u) => toUserModel(u)),
       nextCursor: hasNextPage
         ? sliced[sliced.length - 1]?._id.toString()
         : undefined,
@@ -143,7 +148,7 @@ export class AdminService {
     );
 
     if (!user) throw new NotFoundException('User not found');
-    return this.toUserModel(user);
+    return toUserModel(user);
   }
 
   async activateUser(userId: string): Promise<UserModel> {
@@ -154,7 +159,7 @@ export class AdminService {
     );
 
     if (!user) throw new NotFoundException('User not found');
-    return this.toUserModel(user);
+    return toUserModel(user);
   }
 
   async changeUserRole(userId: string, role: UserRole): Promise<UserModel> {
@@ -165,15 +170,14 @@ export class AdminService {
     );
 
     if (!user) throw new NotFoundException('User not found');
-    return this.toUserModel(user);
+    return toUserModel(user);
   }
 
   // ─── Content Moderation ───────────────────────────────────────────────────
 
-  async deletePost(postId: string): Promise<boolean> {
-    const result = await this.postModel.findByIdAndDelete(postId);
-    if (!result) throw new NotFoundException('Post not found');
-    return true;
+  // Same path as an author deleting: one place does the cascade cleanup.
+  deletePost(postId: string, admin: UserDocument): Promise<boolean> {
+    return this.postsService.remove(postId, admin);
   }
 
   async deleteComment(commentId: string): Promise<boolean> {
@@ -281,18 +285,6 @@ export class AdminService {
   }
 
   // ─── Private helpers ──────────────────────────────────────────────────────
-
-  private toUserModel(doc: UserDocument): UserModel {
-    return {
-      _id: doc._id.toString(),
-      email: doc.email,
-      name: doc.name,
-      role: doc.role,
-      bio: doc.bio,
-      avatarUrl: doc.avatarUrl,
-      createdAt: doc.createdAt,
-    };
-  }
 
   private toReportModel(doc: ReportDocument): ReportModel {
     const reporter = doc.reporter;

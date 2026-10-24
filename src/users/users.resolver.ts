@@ -2,6 +2,7 @@ import { Resolver, Mutation, Query, Args, ID } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UserModel } from './models/user.model';
+import { PublicUserModel } from './models/public-user.model';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateProfileInput } from './dto/update-user.input';
@@ -23,11 +24,11 @@ export class UsersResolver {
     return this.usersService.findById(user._id.toString());
   }
 
-  @Query(() => UserModel, { name: 'user' })
+  @Query(() => PublicUserModel, { name: 'user' })
   async getUserById(
     @Args('id', { type: () => ID }) id: string,
-  ): Promise<UserModel> {
-    return this.usersService.findById(id);
+  ): Promise<PublicUserModel> {
+    return this.usersService.findPublicById(id);
   }
 
   @Mutation(() => UserModel)

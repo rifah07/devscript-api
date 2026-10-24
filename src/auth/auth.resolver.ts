@@ -1,6 +1,7 @@
 import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ObjectType, Field } from '@nestjs/graphql';
+import { PostSpace } from '../posts/schemas/post.schema';
 
 import { AuthService } from './auth.service';
 import { AuthResponse } from './dto/auth-response.model';
@@ -11,6 +12,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { GqlContext } from '../common/interfaces/gql-context.interface';
 import type { UserDocument } from '../users/schemas/user.schema';
 import { Throttle } from '@nestjs/throttler';
+import {
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from './dto/password-reset.input';
 
 @ObjectType()
 export class RefreshResponse {
@@ -47,11 +52,12 @@ export class AuthResolver {
   }
 
   @Mutation(() => RefreshResponse)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   async refreshToken(@Context() context: GqlContext): Promise<RefreshResponse> {
     const refreshToken = context.req.cookies['refresh_token'];
 
     if (!refreshToken) {
-      throw new Error('No refresh token provided');
+      throw new UnauthorizedException('No refresh token provided');
     }
 
     const userAgent = this.extractUserAgent(context);
@@ -74,6 +80,40 @@ export class AuthResolver {
 
     context.res.clearCookie('refresh_token');
     return true;
+  }
+
+  // Same answer whether or not the email exists (no account enumeration).
+  @Mutation(() => Boolean)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async forgotPassword(
+    @Args('input') input: ForgotPasswordInput,
+  ): Promise<boolean> {
+    return this.authService.forgotPassword(input.email, input.space);
+  }
+
+  @Mutation(() => Boolean)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  async resetPassword(
+    @Args('input') input: ResetPasswordInput,
+  ): Promise<boolean> {
+    return this.authService.resetPassword(input.token, input.newPassword);
+  }
+
+  @Mutation(() => Boolean)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  async verifyEmail(@Args('token') token: string): Promise<boolean> {
+    return this.authService.verifyEmail(token);
+  }
+
+  // Sends to the logged-in user's own address only.
+  @Mutation(() => Boolean)
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  async resendVerificationEmail(
+    @CurrentUser() user: UserDocument,
+    @Args('space', { type: () => PostSpace }) space: PostSpace,
+  ): Promise<boolean> {
+    return this.authService.resendVerificationEmail(user, space);
   }
 
   @Mutation(() => Boolean)

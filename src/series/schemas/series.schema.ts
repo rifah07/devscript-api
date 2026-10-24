@@ -24,7 +24,7 @@ export class Series {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   declare author: Types.ObjectId;
 
-  @Prop({ enum: PostSpace, required: true, index: true })
+  @Prop({ type: String, enum: PostSpace, required: true, index: true })
   declare space: PostSpace;
 
   // Cached - updated when posts are added/removed from series

@@ -10,6 +10,7 @@ import {
   IsEnum,
 } from 'class-validator';
 
+import { Type } from 'class-transformer';
 import { PostSpace } from '../../posts/schemas/post.schema';
 
 @InputType()
@@ -36,13 +37,14 @@ export class SearchInput {
 
   @Field(() => Int, { nullable: true, defaultValue: 10 })
   @IsOptional()
+  @Type(() => Number) // REST query strings arrive as "10"
   @IsInt()
   @Min(1)
   @Max(20)
   declare limit?: number;
 
-  @Field(() => PostSpace, { nullable: true })
-  @IsOptional()
+  // Required: each site searches only its own space.
+  @Field(() => PostSpace)
   @IsEnum(PostSpace)
-  declare space?: PostSpace;
+  declare space: PostSpace;
 }

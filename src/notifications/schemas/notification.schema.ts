@@ -21,11 +21,11 @@ export class Notification {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   declare actor: Types.ObjectId;
 
-  @Prop({ enum: NotificationType, required: true })
+  @Prop({ type: String, enum: NotificationType, required: true })
   declare type: NotificationType;
 
   // Optional reference to the related entity
-  @Prop({ type: Types.ObjectId, default: null })
+  @Prop({ type: Types.ObjectId, ref: 'Post', default: null })
   declare postId: Types.ObjectId | null;
 
   @Prop({ type: Types.ObjectId, default: null })

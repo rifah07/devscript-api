@@ -4,6 +4,7 @@ import { UseGuards } from '@nestjs/common';
 import { FollowsService } from './follows.service';
 import { PaginatedUsers, FollowStats } from './models/follow.model';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 
@@ -45,12 +46,13 @@ export class FollowsResolver {
     return this.followsService.getFollowing(userId, cursor);
   }
 
+  // isFollowing is computed for the caller's own token only.
   @Query(() => FollowStats, { name: 'followStats' })
+  @UseGuards(OptionalJwtAuthGuard)
   async getFollowStats(
     @Args('userId', { type: () => ID }) userId: string,
-    @Args('currentUserId', { type: () => ID, nullable: true })
-    currentUserId?: string,
+    @CurrentUser() user: UserDocument | null,
   ): Promise<FollowStats> {
-    return this.followsService.getStats(userId, currentUserId);
+    return this.followsService.getStats(userId, user?._id.toString());
   }
 }

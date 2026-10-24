@@ -6,6 +6,7 @@ import { ReactionSummary } from './models/reaction.model';
 import { ToggleReactionInput } from './dto/toggle-reaction.input';
 import { ReactionTargetType } from './schemas/reaction.schema';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 
@@ -23,13 +24,20 @@ export class ReactionsResolver {
     return this.reactionsService.toggle(input, user);
   }
 
+  // `userReacted` comes from the token. A userId argument let anyone ask
+  // "did user X react to this?" about any account.
   @Query(() => [ReactionSummary], { name: 'reactions' })
+  @UseGuards(OptionalJwtAuthGuard)
   async getReactions(
     @Args('targetId', { type: () => ID }) targetId: string,
     @Args('targetType', { type: () => ReactionTargetType })
     targetType: ReactionTargetType,
-    @Args('userId', { type: () => ID, nullable: true }) userId?: string,
+    @CurrentUser() user: UserDocument | null,
   ): Promise<ReactionSummary[]> {
-    return this.reactionsService.getSummary(targetId, targetType, userId);
+    return this.reactionsService.getSummary(
+      targetId,
+      targetType,
+      user?._id.toString(),
+    );
   }
 }

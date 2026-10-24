@@ -5,6 +5,7 @@ import { SearchService } from './search.service';
 import { SearchInput } from './dto/search.input';
 import { SearchResult } from './models/search-result.model';
 import { PostModel } from '../posts/models/post.model';
+import { PostSpace } from '../posts/schemas/post.schema';
 
 @ObjectType()
 export class TrendingTag {
@@ -26,15 +27,17 @@ export class SearchResolver {
 
   @Query(() => [PostModel], { name: 'topPosts' })
   async getTopPosts(
+    @Args('space', { type: () => PostSpace }) space: PostSpace,
     @Args('limit', { type: () => Int, nullable: true }) limit?: number,
   ): Promise<PostModel[]> {
-    return this.searchService.getTopPosts(limit ?? 10);
+    return this.searchService.getTopPosts(space, limit ?? 10);
   }
 
   @Query(() => [TrendingTag], { name: 'trendingTags' })
   async getTrendingTags(
+    @Args('space', { type: () => PostSpace }) space: PostSpace,
     @Args('limit', { type: () => Int, nullable: true }) limit?: number,
   ): Promise<TrendingTag[]> {
-    return this.searchService.getTrendingTags(limit ?? 20);
+    return this.searchService.getTrendingTags(space, limit ?? 20);
   }
 }

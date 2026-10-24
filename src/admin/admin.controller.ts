@@ -96,8 +96,11 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete any post (admin override)' })
   @ApiParam({ name: 'postId' })
-  async deletePost(@Param('postId') postId: string) {
-    return this.adminService.deletePost(postId);
+  async deletePost(
+    @Param('postId') postId: string,
+    @CurrentUser() admin: UserDocument,
+  ) {
+    return this.adminService.deletePost(postId, admin);
   }
 
   @Delete('comments/:commentId')

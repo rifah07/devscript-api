@@ -21,6 +21,11 @@ export enum PostType {
   NOTE = 'note', // short-form thoughts
 }
 
+export enum BodyFormat {
+  MARKDOWN = 'markdown', // DevScript articles
+  PLAINTEXT = 'plaintext', // poems: line breaks carry meaning
+}
+
 @Schema({ timestamps: true })
 export class Post {
   @Prop({ required: true, trim: true })
@@ -35,6 +40,16 @@ export class Post {
   @Prop({ required: true })
   declare body: string;
 
+  @Prop({ type: String, enum: BodyFormat, default: BodyFormat.MARKDOWN })
+  declare bodyFormat: BodyFormat;
+
+  // Stored so list queries can skip the (large) body field
+  @Prop({ default: '' })
+  declare excerpt: string;
+
+  @Prop({ default: false, index: true })
+  declare featured: boolean;
+
   // AI-generated summary - optional, filled after creation
   @Prop({ default: '' })
   declare summary: string;
@@ -48,7 +63,12 @@ export class Post {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   declare author: Types.ObjectId;
 
-  @Prop({ enum: PostStatus, default: PostStatus.DRAFT, index: true })
+  @Prop({
+    type: String,
+    enum: PostStatus,
+    default: PostStatus.DRAFT,
+    index: true,
+  })
   declare status: PostStatus;
 
   // Read time in minutes - computed on save, stored for performance
@@ -73,6 +93,7 @@ export class Post {
   declare category: Types.ObjectId | null;
 
   @Prop({
+    type: String,
     enum: PostSpace,
     required: true,
     default: PostSpace.DEVSCRIPT,
@@ -81,6 +102,7 @@ export class Post {
   declare space: PostSpace;
 
   @Prop({
+    type: String,
     enum: PostType,
     required: true,
     default: PostType.ARTICLE,
@@ -140,6 +162,11 @@ export class Post {
   @Prop({ type: Date, default: null, index: true })
   declare scheduledAt: Date | null;
 
+  // Unit vector of the post's meaning (Gemini embedding). Never sent to
+  // clients and excluded from normal reads; only "related posts" loads it.
+  @Prop({ type: [Number], select: false, default: undefined })
+  declare embedding?: number[];
+
   @Prop({ default: '' })
   declare narrationUrl: string;
 
@@ -163,7 +190,17 @@ export class Post {
 export const PostSchema = SchemaFactory.createForClass(Post);
 
 // Text index for basic search - allows $text queries on title and body
-PostSchema.index({ title: 'text', body: 'text' });
+// default_language 'none': no English stemming/stop-words, so Bangla text
+// (and code terms) match as written. Title matches count 5x. Changing a
+// text index needs `npm run db:sync-indexes` once (Mongo allows only one).
+PostSchema.index(
+  { title: 'text', body: 'text' },
+  {
+    name: 'post_text_v2',
+    default_language: 'none',
+    weights: { title: 5, body: 1 },
+  },
+);
 PostSchema.index({ category: 1, status: 1, createdAt: -1 });
 PostSchema.index({ space: 1, status: 1, createdAt: -1 });
 PostSchema.index({ space: 1, postType: 1, status: 1, createdAt: -1 });

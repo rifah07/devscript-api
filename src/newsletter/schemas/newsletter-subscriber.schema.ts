@@ -10,7 +10,7 @@ export class NewsletterSubscriber {
   @Prop({ required: true, lowercase: true, trim: true, index: true })
   declare email: string;
 
-  @Prop({ enum: PostSpace, required: true, index: true })
+  @Prop({ type: String, enum: PostSpace, required: true, index: true })
   declare space: PostSpace;
 
   // Double opt-in — subscriber isn't active until they click the confirmation link

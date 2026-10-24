@@ -23,6 +23,8 @@ import {
   ApiConsumes,
   ApiBody,
 } from '@nestjs/swagger';
+import { UPLOAD_LIMITS } from '../common/services/upload.service';
+import { EmailVerifiedGuard } from '../common/guards/email-verified.guard';
 
 import { PostsService } from './posts.service';
 import { CreatePostInput } from './dto/create-post.input';
@@ -32,23 +34,24 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { UserDocument } from '../users/schemas/user.schema';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
-import { UploadService } from '../common/services/upload.service';
 import { PostModel } from './models/post.model';
-import { Headers, UnauthorizedException } from '@nestjs/common';
+import {
+  Headers,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { buildDownloadUrl } from '../common/utils/cloudinary-download.util';
-import { TtsService } from '../ai/tts.service';
+import { safeCompare } from '../common/utils/safe-compare.util';
 
 @ApiTags('Posts')
 @Controller('posts')
 export class PostsController {
   constructor(
     private readonly postsService: PostsService,
-    private readonly uploadService: UploadService,
     private readonly configService: ConfigService,
-    private readonly ttsService: TtsService,
   ) {}
 
   @Post()
@@ -110,7 +113,7 @@ export class PostsController {
   }
 
   @Post(':id/publish')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @ApiBearerAuth('JWT')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Publish a draft post' })
@@ -135,11 +138,11 @@ export class PostsController {
   @ApiOperation({ summary: 'Get related posts by tags and category' })
   @ApiParam({ name: 'id' })
   async getRelated(@Param('id') id: string) {
-    return this.postsService.getRelatedPosts(id);
+    return this.postsService.getRelatedPosts(id, null);
   }
 
   @Post(':id/gallery')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @ApiBearerAuth('JWT')
   @ApiOperation({ summary: 'Upload images to post gallery (max 10 images)' })
   @ApiConsumes('multipart/form-data')
@@ -154,18 +157,18 @@ export class PostsController {
       },
     },
   })
-  @UseInterceptors(FilesInterceptor('files', 10, { storage: memoryStorage() }))
+  @UseInterceptors(
+    FilesInterceptor('files', 10, {
+      storage: memoryStorage(),
+      limits: UPLOAD_LIMITS,
+    }),
+  )
   uploadGalleryImages(
     @Param('id') postId: string,
     @UploadedFiles() files: Express.Multer.File[],
     @CurrentUser() user: UserDocument,
   ): Promise<PostModel> {
-    return this.postsService.addGalleryImages(
-      postId,
-      files,
-      user,
-      this.uploadService,
-    );
+    return this.postsService.addGalleryImages(postId, files, user);
   }
 
   @Delete(':id/gallery/:publicId')
@@ -177,28 +180,25 @@ export class PostsController {
     @Param('publicId') publicId: string,
     @CurrentUser() user: UserDocument,
   ): Promise<PostModel> {
-    return this.postsService.removeGalleryImage(
-      postId,
-      publicId,
-      user,
-      this.uploadService,
-    );
+    return this.postsService.removeGalleryImage(postId, publicId, user);
   }
 
-  @Post('cron/publish-scheduled')
+  // GET because Vercel Cron only sends GET requests.
+  @Get('cron/publish-scheduled')
   @ApiOperation({
     summary:
       'Externally-triggered endpoint to publish due scheduled posts (for Vercel Cron)',
   })
   @ApiResponse({ status: 200, description: 'Number of posts published' })
   @ApiResponse({ status: 401, description: 'Invalid or missing cron secret' })
-  async triggerScheduledPublish(@Headers('x-cron-secret') cronSecret: string) {
-    // Vercel Cron Jobs (or any external cron service) must send this
-    // exact value in the x-cron-secret header, otherwise this endpoint
-    // is publicly exposed and anyone could trigger it.
-    const expectedSecret = process.env.CRON_SECRET;
-
-    if (!expectedSecret || cronSecret !== expectedSecret) {
+  async triggerScheduledPublish(
+    @Headers('authorization') authorization?: string,
+    @Headers('x-cron-secret') cronSecret?: string,
+  ) {
+    // Vercel Cron sends `Authorization: Bearer $CRON_SECRET`; other cron
+    // services can send x-cron-secret. Without a secret this is public.
+    const given = authorization?.replace(/^Bearer /, '') ?? cronSecret;
+    if (!safeCompare(given, process.env.CRON_SECRET)) {
       throw new UnauthorizedException('Invalid cron secret');
     }
 
@@ -215,13 +215,15 @@ export class PostsController {
     @Param('publicId') publicId: string,
     @Res() res: Response,
   ) {
-    // Track the download before redirecting
-    await this.postsService.incrementImageDownloadCount(postId, publicId);
-
+    // Anonymous view: only published posts, and only their own images.
+    // Otherwise this redirects to any asset id an attacker supplies.
     const gallery = await this.postsService.getPostGallery(postId);
     const image = gallery.images.find((img) => img.publicId === publicId);
+    if (!image) throw new NotFoundException('Image not found in this post');
 
-    const filename = image?.alt?.trim() || publicId.split('/').pop() || 'image';
+    await this.postsService.incrementImageDownloadCount(postId, publicId);
+
+    const filename = image.alt?.trim() || publicId.split('/').pop() || 'image';
     const cloudName = this.configService.get<string>('cloudinary.cloudName');
 
     if (!cloudName) {
@@ -236,7 +238,7 @@ export class PostsController {
   }
 
   @Post(':id/narration')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, EmailVerifiedGuard)
   @ApiBearerAuth('JWT')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -247,11 +249,6 @@ export class PostsController {
     @Param('id') postId: string,
     @CurrentUser() user: UserDocument,
   ): Promise<PostModel> {
-    return this.postsService.generateNarration(
-      postId,
-      user,
-      this.ttsService,
-      this.uploadService,
-    );
+    return this.postsService.generateNarration(postId, user);
   }
 }

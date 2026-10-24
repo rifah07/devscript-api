@@ -38,6 +38,11 @@ type AuthorAnalytics {
   totalViews: Int!
 }
 
+enum BodyFormat {
+  MARKDOWN
+  PLAINTEXT
+}
+
 type CategoryModel {
   _id: ID!
   createdAt: DateTime!
@@ -50,7 +55,7 @@ type CategoryModel {
 
 type CommentModel {
   _id: ID!
-  author: UserModel
+  author: PublicUserModel
   body: String!
   createdAt: DateTime!
   isDeleted: Boolean!
@@ -109,6 +114,11 @@ type FollowStats {
   isFollowing: Boolean!
 }
 
+input ForgotPasswordInput {
+  email: String!
+  space: PostSpace!
+}
+
 type GalleryImageModel {
   alt: String
   downloadCount: Int!
@@ -160,21 +170,26 @@ type Mutation {
   deleteSeries(seriesId: ID!): Boolean!
   featurePost(featured: Boolean!, postId: ID!): Boolean!
   followUser(userId: ID!): Boolean!
+  forgotPassword(input: ForgotPasswordInput!): Boolean!
   generateNarration(postId: ID!): PostModel!
-  generatePostSummary(postId: String!): String!
+  generatePostSummary(postId: ID!): String!
   login(loginInput: LoginInput!): AuthResponse!
   logout: Boolean!
   logoutAllDevices: Boolean!
   markAllNotificationsRead: Boolean!
   markNotificationRead(id: ID!): Boolean!
   publishPost(id: ID!): PostModel!
-  recordPostView(postId: ID!, viewerId: ID): Boolean!
+  recordPostView(postId: ID!): Boolean!
   refreshToken: RefreshResponse!
   register(registerInput: RegisterInput!): AuthResponse!
   removePostFromSeries(postId: ID!): PostModel!
+  reorderGallery(postId: ID!, publicIds: [String!]!): PostModel!
   reportContent(input: CreateReportInput!): ReportModel!
+  resendVerificationEmail(space: PostSpace!): Boolean!
+  resetPassword(input: ResetPasswordInput!): Boolean!
   reviewReport(input: ReviewReportInput!): ReportModel!
   schedulePost(postId: ID!, scheduledAt: String!): PostModel!
+  setPostCover(postId: ID!, publicId: String!): PostModel!
   subscribeToNewsletter(input: SubscribeInput!): Boolean!
   toggleBookmark(postId: ID!): Boolean!
   toggleReaction(input: ToggleReactionInput!): Boolean!
@@ -183,18 +198,22 @@ type Mutation {
   unsubscribeFromNewsletter(token: String!): Boolean!
   updateCategory(input: UpdateCategoryInput!): CategoryModel!
   updateComment(input: UpdateCommentInput!): CommentModel!
+  updateGalleryImageAlt(alt: String!, postId: ID!, publicId: String!): PostModel!
   updatePost(input: UpdatePostInput!): PostModel!
   updateProfile(input: UpdateProfileInput!): UserModel!
+  verifyEmail(token: String!): Boolean!
 }
 
 type NotificationModel {
   _id: ID!
-  actor: UserModel
+  actor: PublicUserModel
   commentId: ID
   createdAt: DateTime!
   isRead: Boolean!
   message: String
   postId: ID
+  postSlug: String
+  postSpace: PostSpace
   type: NotificationType!
 }
 
@@ -232,7 +251,7 @@ type PaginatedUsers {
   hasNextPage: Boolean!
   nextCursor: String
   totalCount: Int!
-  users: [UserModel!]!
+  users: [PublicUserModel!]!
 }
 
 type PlatformStats {
@@ -254,13 +273,16 @@ type PostGalleryModel {
 
 type PostModel {
   _id: ID!
-  author: UserModel
-  body: String!
+  author: PublicUserModel
+  body: String
+  bodyFormat: BodyFormat!
   bookmarksCount: Int!
   category: CategoryModel
   coverImageUrl: String
   coverImageVariants: ImageVariants
   createdAt: DateTime!
+  excerpt: String!
+  featured: Boolean!
   gallery: [GalleryImageModel!]!
   narrationDuration: Int
   narrationGeneratedAt: DateTime
@@ -270,6 +292,9 @@ type PostModel {
   ogTitle: String
   postType: PostType!
   readTime: Int!
+  scheduledAt: DateTime
+  series: SeriesRefModel
+  seriesOrder: Int
   slug: String!
   space: PostSpace!
   status: PostStatus!
@@ -300,6 +325,7 @@ enum PostType {
 
 input PostsFilterInput {
   authorId: ID
+  categoryId: ID
   cursor: ID
   postType: PostType
   space: PostSpace
@@ -307,15 +333,28 @@ input PostsFilterInput {
   tag: String
 }
 
+type PublicUserModel {
+  _id: ID!
+  avatarUrl: String
+  bio: String
+  createdAt: DateTime
+  github: String
+  leetcode: String
+  name: String!
+  twitter: String
+  website: String
+}
+
 type Query {
   adminReports(cursor: ID, status: ReportStatus): PaginatedReports!
   adminUsers(filter: AdminUsersFilterInput): AdminUsersResult!
+  askPost(postId: ID!, question: String!): String!
   authorSeries(authorId: ID!): [SeriesModel!]!
   categories(space: PostSpace): [CategoryModel!]!
   category(slug: String!): CategoryModel!
   comments(postId: ID!): [CommentModel!]!
   exportMyData: JSON!
-  followStats(currentUserId: ID, userId: ID!): FollowStats!
+  followStats(userId: ID!): FollowStats!
   followers(cursor: ID, userId: ID!): PaginatedUsers!
   following(cursor: ID, userId: ID!): PaginatedUsers!
   isBookmarked(postId: ID!): Boolean!
@@ -328,16 +367,17 @@ type Query {
   post(slug: String!): PostModel!
   postGallery(postId: ID!): PostGalleryModel!
   posts(filter: PostsFilterInput): PaginatedPosts!
-  reactions(targetId: ID!, targetType: ReactionTargetType!, userId: ID): [ReactionSummary!]!
+  reactions(targetId: ID!, targetType: ReactionTargetType!): [ReactionSummary!]!
   relatedPosts(limit: Int, postId: ID!): [PostModel!]!
+  reviewDraft(body: String!, postType: PostType, title: String!): AiSuggestion!
   search(input: SearchInput!): SearchResult!
   series(slug: String!): SeriesModel!
-  suggestTags(body: String!, title: String!): AiSuggestion!
-  suggestTitles(draft: String!): AiSuggestion!
-  topPosts(limit: Int): [PostModel!]!
-  trendingTags(limit: Int): [TrendingTag!]!
+  suggestTags(body: String!, postType: PostType, title: String!): AiSuggestion!
+  suggestTitles(draft: String!, postType: PostType): AiSuggestion!
+  topPosts(limit: Int, space: PostSpace!): [PostModel!]!
+  trendingTags(limit: Int, space: PostSpace!): [TrendingTag!]!
   unreadNotificationsCount: Int!
-  user(id: ID!): UserModel!
+  user(id: ID!): PublicUserModel!
 }
 
 type ReactionSummary {
@@ -367,6 +407,7 @@ input RegisterInput {
   email: String!
   name: String!
   password: String!
+  space: PostSpace
 }
 
 type ReportModel {
@@ -404,6 +445,11 @@ enum ReportTargetType {
   USER
 }
 
+input ResetPasswordInput {
+  newPassword: String!
+  token: String!
+}
+
 input ReviewReportInput {
   adminNote: String
   reportId: ID!
@@ -415,7 +461,7 @@ input SearchInput {
   cursor: ID
   limit: Int = 10
   query: String!
-  space: PostSpace
+  space: PostSpace!
   tag: String
 }
 
@@ -428,7 +474,7 @@ type SearchResult {
 
 type SeriesModel {
   _id: ID!
-  author: UserModel
+  author: PublicUserModel
   coverImageUrl: String
   createdAt: DateTime!
   description: String
@@ -436,6 +482,12 @@ type SeriesModel {
   posts: [PostModel!]
   slug: String!
   space: PostSpace!
+  title: String!
+}
+
+type SeriesRefModel {
+  _id: ID!
+  slug: String!
   title: String!
 }
 
@@ -493,13 +545,19 @@ type UserModel {
   bio: String
   createdAt: DateTime
   email: String!
+  emailVerified: Boolean!
   github: String
   leetcode: String
   name: String!
-  penName: String
+  plan: UserPlan!
   role: UserRole!
   twitter: String
   website: String
+}
+
+enum UserPlan {
+  FREE
+  PREMIUM
 }
 
 enum UserRole {

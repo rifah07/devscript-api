@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import * as request from 'supertest';
+import request from 'supertest';
 
+import { getModelToken } from '@nestjs/mongoose';
 import { AppModule } from '../src/app.module';
 
 describe('Posts (e2e)', () => {
@@ -35,6 +36,13 @@ describe('Posts (e2e)', () => {
         password: 'securePassword123',
       });
     accessToken = registerRes.body.accessToken;
+    // Publishing needs a confirmed email; this suite is about posts.
+    await app
+      .get(getModelToken('User'))
+      .updateOne(
+        { email: 'writer@example.com' },
+        { $set: { emailVerified: true } },
+      );
   });
 
   afterAll(async () => {
@@ -58,7 +66,9 @@ describe('Posts (e2e)', () => {
       .expect(201);
 
     expect(response.body.title).toBe('Testing NestJS Applications');
-    expect(response.body.slug).toMatch(/^testing-nestjs-applications-\d+$/);
+    expect(response.body.slug).toMatch(
+      /^testing-nestjs-applications-[0-9a-f]{6}$/,
+    );
     expect(response.body.status).toBe('draft'); // posts start as draft
 
     createdPostId = response.body._id;

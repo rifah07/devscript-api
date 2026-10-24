@@ -11,7 +11,6 @@ import jwtConfig from './config/jwt.config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PostsModule } from './posts/posts.module';
-import { AiModule } from './ai/ai.module';
 import { CommentsModule } from './comments/comments.module';
 import { ReactionsModule } from './reactions/reactions.module';
 import cloudinaryConfig from './config/cloudinary.config';
@@ -28,12 +27,17 @@ import { SeriesModule } from './series/series.module';
 import { HealthModule } from './health/health.module';
 import { AccountModule } from './account/account.module';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { CustomThrottlerGuard } from './common/guards/custom-throttler.guard';
 import emailConfig from './config/email.config';
+import aiConfig from './config/ai.config';
 import { NewsletterModule } from './newsletter/newsletter.module';
 import { EmailModule } from './email/email.module';
-import { QueueModule } from './queue/queue.module';
+import { validateEnv } from './config/env.validation';
+import { depthLimit } from './common/graphql/depth-limit.rule';
+import { GqlExceptionFilterHandler } from './common/filters/gql-exception.filter';
+
+const isProd = process.env.NODE_ENV === 'production';
 
 @Module({
   imports: [
@@ -49,8 +53,10 @@ import { QueueModule } from './queue/queue.module';
         cloudinaryConfig,
         seoConfig,
         emailConfig,
+        aiConfig,
       ],
       envFilePath: '.env',
+      validate: validateEnv,
     }),
 
     // ─── MongoDB Connection ───────────────────────────────────────────────
@@ -75,7 +81,11 @@ import { QueueModule } from './queue/queue.module';
       driver: ApolloDriver,
       autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
       sortSchema: true,
-      playground: process.env.NODE_ENV !== 'production',
+      playground: !isProd,
+      // Introspection hands attackers a map of every field; the frontend uses
+      // the committed schema.gql for codegen instead.
+      introspection: !isProd,
+      validationRules: [depthLimit(7)],
       // Pass the HTTP request into GraphQL context so resolvers
       // can access req.user (set by JWT guard)
       context: (ctx: Record<string, unknown>) => ctx,
@@ -95,7 +105,6 @@ import { QueueModule } from './queue/queue.module';
     AuthModule,
     UsersModule,
     PostsModule,
-    AiModule,
     CommentsModule,
     ReactionsModule,
     CommonModule,
@@ -111,7 +120,6 @@ import { QueueModule } from './queue/queue.module';
     AccountModule,
     EmailModule,
     NewsletterModule,
-    QueueModule,
   ],
 
   providers: [
@@ -119,6 +127,7 @@ import { QueueModule } from './queue/queue.module';
       provide: APP_GUARD,
       useClass: CustomThrottlerGuard,
     },
+    { provide: APP_FILTER, useClass: GqlExceptionFilterHandler },
   ],
 })
 export class AppModule {}

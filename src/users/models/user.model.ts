@@ -1,43 +1,22 @@
-import { Field, ID, ObjectType, registerEnumType } from '@nestjs/graphql';
-import { UserRole } from '../schemas/user.schema';
+import { Field, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { UserPlan, UserRole } from '../schemas/user.schema';
+import { PublicUserModel } from './public-user.model';
 
 registerEnumType(UserRole, { name: 'UserRole' });
+registerEnumType(UserPlan, { name: 'UserPlan' });
 
+// Private view: only `me`, `updateProfile`, auth responses and admin.
 @ObjectType()
-export class UserModel {
-  @Field(() => ID)
-  declare _id: string;
-
+export class UserModel extends PublicUserModel {
   @Field()
   declare email: string;
-
-  @Field()
-  declare name: string;
 
   @Field(() => UserRole)
   declare role: UserRole;
 
-  @Field({ nullable: true })
-  declare bio?: string;
+  @Field(() => UserPlan)
+  declare plan: UserPlan;
 
-  @Field({ nullable: true })
-  declare avatarUrl?: string;
-
-  @Field({ nullable: true })
-  declare website?: string;
-
-  @Field({ nullable: true })
-  declare github?: string;
-
-  @Field({ nullable: true })
-  declare leetcode?: string;
-
-  @Field({ nullable: true })
-  declare twitter?: string;
-
-  @Field({ nullable: true })
-  declare penName?: string;
-
-  @Field({ nullable: true })
-  declare createdAt?: Date;
+  @Field()
+  declare emailVerified: boolean;
 }
