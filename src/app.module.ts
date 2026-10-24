@@ -79,7 +79,8 @@ const isProd = process.env.NODE_ENV === 'production';
     // gives you better TypeScript integration.
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+      // Serverless disks are read-only: build the schema in memory in prod
+      autoSchemaFile: isProd ? true : join(process.cwd(), 'src/schema.gql'),
       sortSchema: true,
       playground: !isProd,
       // Introspection hands attackers a map of every field; the frontend uses
