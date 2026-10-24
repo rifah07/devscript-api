@@ -4,7 +4,7 @@ One NestJS backend for two writing sites: **DevScript** (technical articles, ope
 
 **Stack:** NestJS 11 · TypeScript · GraphQL (Apollo, code-first) + REST · MongoDB/Mongoose · JWT with rotating refresh tokens · Google Gemini (`@google/genai`) · Cloudinary · Resend email
 
-**Frontend:** [devscript-web](https://github.com/rifah07/devscript-web) (both sites from one Next.js codebase) · **Deploy guide:** [docs/DEPLOY.md](docs/DEPLOY.md) (free, no card)
+**Live:** [devscript-seven.vercel.app](https://devscript-seven.vercel.app) · **Frontend:** [devscript-web](https://github.com/rifah07/devscript-web) (both sites from one Next.js codebase)
 
 ---
 
@@ -13,7 +13,7 @@ One NestJS backend for two writing sites: **DevScript** (technical articles, ope
 - **Two products, one backend, zero leakage.** Every query is scoped to a `space`; a pen-name site and a real-name site share code but never data or links.
 - **Security audited and pinned by tests.** Account takeover via Google linking, login CSRF, email HTML injection and more were found, fixed and locked in by `test/security.e2e-spec.ts`.
 - **AI that stays cheap and honest.** Free Gemini models behind per-user quotas, a site-wide budget and an output guardrail; semantic related posts use embeddings plus a top-k heap instead of a vector database.
-- **Free to run.** Deploys on Vercel + MongoDB Atlas M0 + Cloudinary + Resend with no credit card.
+- **Free to run.** Runs on Vercel, MongoDB Atlas M0, Cloudinary and Resend, all on free plans.
 
 ## Architecture
 
@@ -116,13 +116,12 @@ Users have a `plan` (`FREE` or `PREMIUM`). What each plan gets is defined in one
 
 ## Docs
 
-- `docs/DEPLOY.md`: free, no-card deployment (Vercel + Atlas + Cloudinary + Resend + cron-job.org)
 - `docs/DECISIONS.md`: trade-offs and where the code differs from the original spec
 - `docs/PROJECT_OVERVIEW.md`, `docs/FRONTEND_SPEC.md`: the original design documents
 
 ## Status
 
-Feature-complete and audited. Next: deployment, and a verified email domain so readers receive newsletter confirmations and reset emails (until then Resend delivers only to the account owner, and emails are logged locally).
+Live, feature-complete and audited. Next: a verified email domain so readers receive newsletter confirmations and reset emails (until then Resend delivers only to the account owner).
 
 ## Author
 
