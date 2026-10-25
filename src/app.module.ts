@@ -66,8 +66,9 @@ const isProd = process.env.NODE_ENV === 'production';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         uri: configService.get<string>('database.uri'),
-        // These options prevent deprecation warnings:
-        dbName: 'devscript',
+        // Overrides the name in the URI. Set MONGODB_DB locally so development
+        // never writes to the live 'devscript' database.
+        dbName: process.env.MONGODB_DB || 'devscript',
       }),
       inject: [ConfigService],
     }),
@@ -86,6 +87,8 @@ const isProd = process.env.NODE_ENV === 'production';
       // Introspection hands attackers a map of every field; the frontend uses
       // the committed schema.gql for codegen instead.
       introspection: !isProd,
+      // ...and "Did you mean ...?" hints would rebuild that map one guess at a time
+      hideSchemaDetailsFromClientErrors: isProd,
       validationRules: [depthLimit(7)],
       // Pass the HTTP request into GraphQL context so resolvers
       // can access req.user (set by JWT guard)

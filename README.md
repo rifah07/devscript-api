@@ -4,7 +4,9 @@ One NestJS backend for two writing sites: **DevScript** (technical articles, ope
 
 **Stack:** NestJS 11 · TypeScript · GraphQL (Apollo, code-first) + REST · MongoDB/Mongoose · JWT with rotating refresh tokens · Google Gemini (`@google/genai`) · Cloudinary · Resend email
 
-**Live:** [devscript-seven.vercel.app](https://devscript-seven.vercel.app) · **Frontend:** [devscript-web](https://github.com/rifah07/devscript-web) (both sites from one Next.js codebase)
+**Live:** [devscript-seven.vercel.app](https://devscript-seven.vercel.app) · [misk-journal.vercel.app](https://misk-journal.vercel.app) · **Frontend:** [devscript-web](https://github.com/rifah07/devscript-web) (both sites from one Next.js codebase)
+
+▶ **Demos:** [DevScript, 1 min](https://github.com/rifah07/devscript-web/blob/master/docs/demo-devscript.mp4) · [The Misk Journal, 45 s](https://github.com/rifah07/devscript-web/blob/master/docs/demo-misk.mp4)
 
 ---
 
@@ -66,7 +68,7 @@ flowchart LR
 
 ```bash
 npm install
-cp .env.example .env     # fill MONGODB_URI, secrets, Cloudinary, GEMINI_API_KEY
+cp .env.example .env     # fill MONGODB_URI, secrets, Cloudinary, GEMINI_API_KEY; keep MONGODB_DB=devscript_local so you never write to live data
 npm run start:dev        # http://localhost:3000/graphql · Swagger at /api/docs
 ```
 
