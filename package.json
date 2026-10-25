@@ -53,7 +53,7 @@
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "mongoose": "^9.6.2",
-    "multer": "^2.1.1",
+    "multer": "^2.5.0",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-jwt": "^4.0.1",
@@ -66,6 +66,11 @@
   "overrides": {
     "@apollo/server-plugin-landing-page-graphql-playground": {
       "@apollo/server": "$@apollo/server"
+    },
+    "@graphql-tools/utils": "^12.1.0",
+    "multer": "$multer",
+    "@nestjs/swagger": {
+      "js-yaml": "^5.5.0"
     }
   },
   "devDependencies": {
