@@ -2,7 +2,8 @@ import { registerAs } from '@nestjs/config';
 
 export default registerAs('seo', () => ({
   devscriptUrl: process.env.DEVSCRIPT_URL ?? 'https://devscript.com',
-  miskJournalUrl: process.env.MISK_JOURNAL_URL ?? 'https://misk-journal.vercel.app',
+  miskJournalUrl:
+    process.env.MISK_JOURNAL_URL ?? 'https://misk-journal.vercel.app',
   siteName: {
     devscript: 'DevScript',
     personal: 'The Misk Journal',
